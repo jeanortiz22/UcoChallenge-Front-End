@@ -10,31 +10,30 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'; // ✅ Necesitas onMounted
-import { useRouter } from 'vue-router'; // ✅ Necesitas useRouter
+import { onMounted, watch } from 'vue'; // ✅ Importar watch también
+import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 
 const router = useRouter();
-const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0(); // ✅ Importa isAuthenticated e isLoading
+const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
 
 // Función de redirección
 const login = () => {
   loginWithRedirect(); 
 };
 
-// 🛑 Lógica Clave: Redireccionar al Dashboard si ya está autenticado
-onMounted(() => {
-    // Si ya está autenticado (el SDK ya lo procesó), redirige.
-    if (isAuthenticated.value && !isLoading.value) {
-        router.push({ name: 'dashboard' }); 
-    }
-    // Nota: El SDK de Auth0 maneja la redirección inicial tras el login.
-    // Esta guardia es para cuando el usuario intenta volver a esta URL.
-});
+// 🔄 Observar cambios en la autenticación
+watch([isAuthenticated, isLoading], ([auth, loading]) => {
+  // Redirigir solo cuando termine de cargar Y esté autenticado
+  if (!loading && auth) {
+    console.log('✅ Usuario autenticado, redirigiendo al dashboard...');
+    router.push({ name: 'Dashboard' });
+  }
+}, { immediate: true }); // immediate: true ejecuta inmediatamente al montar
+
 </script>
 
 <style scoped>
-/* Estilos solo de referencia */
 .login-container {
     text-align: center;
     padding: 50px;
