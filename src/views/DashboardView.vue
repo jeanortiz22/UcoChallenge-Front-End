@@ -294,12 +294,12 @@ onMounted(() => {
 
 .header h1 {
   margin: 0 0 5px 0;
-  color: #333;
+  color: #81c784;
   font-size: 28px;
 }
 
 .welcome-text {
-  color: #666;
+  color: #81c784;
   margin: 0;
 }
 
@@ -596,4 +596,18 @@ onMounted(() => {
     padding: 8px;
   }
 }
+
+.text-green {
+  color: #00b37e; /* verde elegante */
+}
+
+.text-green-light {
+  color: #00d68f; /* un poco más claro para el subtítulo */
+}
+
+.welcome-text {
+  font-size: 1rem;
+  margin-top: 0.3rem;
+}
+
 </style>

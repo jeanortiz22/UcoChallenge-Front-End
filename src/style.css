@@ -26,9 +26,13 @@ body {
   margin: 0;
   display: flex;
   place-items: center;
+  justify-content: center;
   min-width: 320px;
   min-height: 100vh;
+  background: linear-gradient(135deg, #001f0d 0%, #003b1a 50%, #000000 100%) !important;
+  background-attachment: fixed;
 }
+
 
 h1 {
   font-size: 3.2em;
@@ -65,15 +69,9 @@ button:focus-visible {
   text-align: center;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+
+#app {
+  width: 100%;
+  height: 100%;
+  background: transparent !important;
 }
