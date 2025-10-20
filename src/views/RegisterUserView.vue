@@ -2,11 +2,10 @@
   <div class="register-container">
     <div class="header">
       <h2>Registrar Nuevo Usuario</h2>
-      <button @click="goBack" class="btn-back">← Volver al Dashboard</button>
+      <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
     </div>
 
     <form @submit.prevent="handleSubmit" class="register-form">
-      <!-- Nombres -->
       <div class="form-row">
         <div class="form-group">
           <label for="firstName">Primer Nombre *</label>
@@ -30,7 +29,6 @@
         </div>
       </div>
 
-      <!-- Apellidos -->
       <div class="form-row">
         <div class="form-group">
           <label for="firstSurname">Primer Apellido *</label>
@@ -54,7 +52,6 @@
         </div>
       </div>
 
-      <!-- Identificación -->
       <div class="form-row">
         <div class="form-group">
           <label for="idType">Tipo de Identificación *</label>
@@ -62,7 +59,6 @@
             id="idType" 
             v-model="formData.idType" 
             required
-            @change="loadIdentificationTypes"
           >
             <option value="">Seleccione...</option>
             <option 
@@ -86,29 +82,44 @@
           />
         </div>
       </div>
-
-      <!-- Email -->
-      <div class="form-group full-width">
-        <label for="email">Correo Electrónico *</label>
-        <input 
-          id="email"
-          v-model="formData.email" 
-          type="email" 
-          required
-          placeholder="usuario@ucochallenge.com"
-        />
-      </div>
-
-      <!-- Teléfono y Ciudad -->
-      <div class="form-row">
+      <div class="form-row location-row">
         <div class="form-group">
-          <label for="mobileNumber">Teléfono Móvil</label>
-          <input 
-            id="mobileNumber"
-            v-model="formData.mobileNumber" 
-            type="tel"
-            placeholder="3001234567"
-          />
+          <label for="country">País de Residencia *</label>
+          <select 
+            id="country" 
+            v-model="formData.country" 
+            required
+            @change="loadDepartments(formData.country)"
+          >
+            <option value="">Seleccione...</option>
+            <option 
+              v-for="pais in paises" 
+              :key="pais.id" 
+              :value="pais.id"
+            >
+              {{ pais.nombre }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="department">Departamento/Estado *</label>
+          <select 
+            id="department" 
+            v-model="formData.department" 
+            required
+            :disabled="!formData.country"
+            @change="loadCities(formData.department)"
+          >
+            <option value="">Seleccione...</option>
+            <option 
+              v-for="dep in departamentos" 
+              :key="dep.id" 
+              :value="dep.id"
+            >
+              {{ dep.nombre }}
+            </option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -117,6 +128,7 @@
             id="homeCity" 
             v-model="formData.homeCity" 
             required
+            :disabled="!formData.department"
           >
             <option value="">Seleccione...</option>
             <option 
@@ -129,8 +141,32 @@
           </select>
         </div>
       </div>
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label for="email">Correo Electrónico *</label>
+          <input 
+            id="email"
+            v-model="formData.email" 
+            type="email" 
+            required
+            placeholder="usuario@ucochallenge.com"
+          />
+        </div>
 
-      <!-- Botones -->
+        <div class="form-group">
+          <label for="mobileNumber">Teléfono Móvil</label>
+          <input 
+            id="mobileNumber"
+            v-model="formData.mobileNumber" 
+            type="tel"
+            placeholder="3001234567"
+          />
+        </div>
+      </div>
+
+
+
       <div class="form-actions">
         <button type="submit" class="btn-submit" :disabled="isSubmitting">
           {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
@@ -140,7 +176,6 @@
         </button>
       </div>
 
-      <!-- Mensajes -->
       <div v-if="successMessage" class="message success">
         {{ successMessage }}
       </div>
@@ -155,25 +190,30 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axiosInstance from '../http/axiosInstance';
+// Asegúrate de que esta ruta sea correcta para tu proyecto
+import axiosInstance from '../http/axiosInstance'; 
 
 const router = useRouter();
 
-// Form data matching RegisterUserDomain
+// Form data matching RegisterUserDomain + new location fields
 const formData = ref({
-  idType: '',        // UUID
-  idNumber: '',      // String
-  firstName: '',     // String
-  secondName: '',    // String
-  firstSurname: '',  // String
-  secondSurname: '', // String
-  homeCity: '',      // UUID
-  email: '',         // String
-  mobileNumber: ''   // String
+  idType: '', 
+  idNumber: '', 
+  firstName: '',
+  secondName: '',
+  firstSurname: '',
+  secondSurname: '',
+  country: '',    // NUEVO: UUID del país
+  department: '', // NUEVO: UUID del departamento
+  homeCity: '',   // UUID de la ciudad
+  email: '', 
+  mobileNumber: ''
 });
 
 // Catálogos
 const tiposIdentificacion = ref([]);
+const paises = ref([]); 
+const departamentos = ref([]); 
 const ciudades = ref([]);
 
 // Estados
@@ -185,40 +225,85 @@ const goBack = () => {
   router.push({ name: 'Dashboard' });
 };
 
-// Cargar tipos de identificación desde el backend
+// Cargar tipos de identificación
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/tipos-identificacion');
     tiposIdentificacion.value = response.data;
-    console.log('✅ Tipos de identificación cargados:', response.data);
   } catch (error) {
     console.error('❌ Error al cargar tipos de identificación:', error);
-    // Si falla, usar valores por defecto (temporal)
+    // Valores por defecto (Fallback)
     tiposIdentificacion.value = [
       { id: '00000000-0000-0000-0000-000000000001', nombre: 'Cédula de Ciudadanía' },
       { id: '00000000-0000-0000-0000-000000000002', nombre: 'Cédula de Extranjería' },
-      { id: '00000000-0000-0000-0000-000000000003', nombre: 'Tarjeta de Identidad' },
-      { id: '00000000-0000-0000-0000-000000000004', nombre: 'Pasaporte' }
     ];
   }
 };
 
-// Cargar ciudades desde el backend
-const loadCities = async () => {
+// Cargar países
+const loadCountries = async () => {
   try {
-    const response = await axiosInstance.get('/api/v1/ciudades');
+    const response = await axiosInstance.get('/api/v1/paises');
+    paises.value = response.data;
+  } catch (error) {
+    console.error('❌ Error al cargar países:', error);
+    // Valores por defecto (Fallback)
+    paises.value = [
+      { id: '00000000-0000-0000-0000-000000000099', nombre: 'Colombia' },
+      { id: '00000000-0000-0000-0000-000000000098', nombre: 'México' },
+    ];
+  }
+};
+
+// Cargar departamentos (depende del país)
+const loadDepartments = async (countryId) => {
+  // Limpiar selecciones dependientes
+  departamentos.value = [];
+  formData.value.department = '';
+  ciudades.value = [];
+  formData.value.homeCity = '';
+  
+  if (!countryId) return;
+
+  try {
+    const response = await axiosInstance.get(`/api/v1/paises/${countryId}/departamentos`);
+    departamentos.value = response.data;
+  } catch (error) {
+    console.error('❌ Error al cargar departamentos:', error);
+    // Valores por defecto (Fallback)
+    if (countryId === '00000000-0000-0000-0000-000000000099') { // Colombia
+      departamentos.value = [
+        { id: '00000000-0000-0000-0000-000000000080', nombre: 'Antioquia' },
+        { id: '00000000-0000-0000-0000-000000000081', nombre: 'Cundinamarca' },
+      ];
+    } 
+  }
+};
+
+// Cargar ciudades (depende del departamento)
+const loadCities = async (departmentId) => {
+  // Limpiar selección dependiente
+  ciudades.value = [];
+  formData.value.homeCity = '';
+
+  if (!departmentId) return;
+
+  try {
+    const response = await axiosInstance.get(`/api/v1/departamentos/${departmentId}/ciudades`);
     ciudades.value = response.data;
-    console.log('✅ Ciudades cargadas:', response.data);
   } catch (error) {
     console.error('❌ Error al cargar ciudades:', error);
-    // Si falla, usar valores por defecto (temporal)
-    ciudades.value = [
-      { id: '00000000-0000-0000-0000-000000000010', nombre: 'Rionegro' },
-      { id: '00000000-0000-0000-0000-000000000011', nombre: 'Medellín' },
-      { id: '00000000-0000-0000-0000-000000000012', nombre: 'Bogotá' },
-      { id: '00000000-0000-0000-0000-000000000013', nombre: 'Cali' },
-      { id: '00000000-0000-0000-0000-000000000014', nombre: 'Barranquilla' }
-    ];
+    // Valores por defecto (Fallback)
+    if (departmentId === '00000000-0000-0000-0000-000000000080') { // Antioquia
+      ciudades.value = [
+        { id: '00000000-0000-0000-0000-000000000010', nombre: 'Rionegro' },
+        { id: '00000000-0000-0000-0000-000000000011', nombre: 'Medellín' },
+      ];
+    } else if (departmentId === '00000000-0000-0000-0000-000000000081') { // Cundinamarca
+      ciudades.value = [
+        { id: '00000000-0000-0000-0000-000000000012', nombre: 'Bogotá' },
+      ];
+    } 
   }
 };
 
@@ -228,7 +313,7 @@ const handleSubmit = async () => {
   errorMessage.value = '';
 
   try {
-    // Enviar datos con la estructura exacta de RegisterUserDomain
+    // El payload final solo incluye homeCity, que es el UUID de la ciudad seleccionada.
     const payload = {
       idType: formData.value.idType,
       idNumber: formData.value.idNumber,
@@ -236,7 +321,7 @@ const handleSubmit = async () => {
       secondName: formData.value.secondName || null,
       firstSurname: formData.value.firstSurname,
       secondSurname: formData.value.secondSurname || null,
-      homeCity: formData.value.homeCity,
+      homeCity: formData.value.homeCity, // UUID de la ciudad
       email: formData.value.email,
       mobileNumber: formData.value.mobileNumber || null
     };
@@ -246,7 +331,6 @@ const handleSubmit = async () => {
     const response = await axiosInstance.post('/api/v1/usuarios/register', payload);
     
     successMessage.value = '✅ Usuario registrado exitosamente';
-    console.log('✅ Usuario creado:', response.data);
     
     // Redirigir al dashboard después de 2 segundos
     setTimeout(() => {
@@ -283,22 +367,27 @@ const resetForm = () => {
     secondName: '',
     firstSurname: '',
     secondSurname: '',
+    country: '', 
+    department: '', 
     homeCity: '',
     email: '',
     mobileNumber: ''
   };
+  departamentos.value = []; 
+  ciudades.value = []; 
   successMessage.value = '';
   errorMessage.value = '';
 };
 
-// Cargar catálogos al montar el componente
+// Cargar catálogos iniciales al montar el componente
 onMounted(() => {
   loadIdentificationTypes();
-  loadCities();
+  loadCountries(); 
 });
 </script>
 
 <style scoped>
+/* Contenedor y Header (se mantienen igual) */
 .register-container {
   max-width: 850px;
   margin: 40px auto;
@@ -326,7 +415,7 @@ onMounted(() => {
 .header h2 {
   font-size: 26px;
   font-weight: 700;
-  color: #81c784; /* verde pastel suave */
+  color: #81c784; 
   margin: 0;
   letter-spacing: 0.5px;
   text-shadow: 0 0 5px rgba(129, 199, 132, 0.2);
@@ -362,11 +451,17 @@ onMounted(() => {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Estilo para las filas de 2 elementos (Nombres, Apellidos, Identificación, Teléfono/Email) */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 25px;
   margin-bottom: 20px;
+}
+
+/* Estilo específico para la fila de 3 elementos (País, Departamento, Ciudad) */
+.location-row {
+  grid-template-columns: repeat(3, 1fr); /* 3 columnas iguales */
 }
 
 .form-group {
@@ -378,7 +473,7 @@ onMounted(() => {
 .form-group label {
   margin-bottom: 8px;
   font-weight: 600;
-  color: #a5d6a7; /* Verde grisáceo */
+  color: #a5d6a7; 
   font-size: 14px;
 }
 
@@ -405,6 +500,16 @@ onMounted(() => {
   box-shadow: 0 0 10px rgba(102, 187, 106, 0.3);
 }
 
+/* Estilo para campos de selección deshabilitados */
+.form-group select:disabled {
+  background-color: #1a231b;
+  color: #444;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+
+/* Acciones y Botones (se mantienen igual) */
 .form-actions {
   display: flex;
   gap: 12px;
@@ -473,7 +578,16 @@ onMounted(() => {
   border-left: 4px solid #ef5350;
 }
 
+/* Media Queries para Responsividad */
+@media (max-width: 900px) {
+  /* En pantallas medianas (e.g., tablets), la fila de 3 pasa a 2 columnas */
+  .location-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 @media (max-width: 768px) {
+  /* En pantallas más pequeñas, todas las filas pasan a 1 columna */
   .form-row {
     grid-template-columns: 1fr;
   }

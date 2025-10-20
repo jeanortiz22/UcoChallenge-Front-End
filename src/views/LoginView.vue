@@ -26,7 +26,7 @@ const login = () => {
 watch([isAuthenticated, isLoading], ([auth, loading]) => {
   // Redirigir solo cuando termine de cargar Y esté autenticado
   if (!loading && auth) {
-    console.log('✅ Usuario autenticado, redirigiendo al dashboard...');
+    console.log('✅ Usuario autenticado, redirigiendo al panel de control...');
     router.push({ name: 'Dashboard' });
   }
 }, { immediate: true }); // immediate: true ejecuta inmediatamente al montar
