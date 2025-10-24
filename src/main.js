@@ -1,55 +1,20 @@
 import { createApp } from 'vue';
+import { createAuth0 } from '@auth0/auth0-vue';
 import App from './App.vue';
 import router from './router';
-import { createAuth0 } from '@auth0/auth0-vue';
-import axiosInstance, { setupAxiosInterceptor } from './http/axiosInstance';
-import './style.css';
 
 const app = createApp(App);
 
-// 1️⃣ Configurar Auth0
-const auth0Plugin = createAuth0({
-  domain: 'dev-kkp1gdup1nvbr6qj.us.auth0.com',
-  clientId: 'mcDe2B3YV3VBQ4Ucl38VoWMKLvIQdrIB',
-  authorizationParams: {
-    redirect_uri: window.location.origin,
-    audience: 'https://api.ucochallenge.com',
-  },
-});
+app.use(
+  createAuth0({
+    domain: import.meta.env.VITE_AUTH0_DOMAIN,
+    clientId: import.meta.env.VITE_AUTH0_CLIENT_ID,
+    authorizationParams: {
+      audience: import.meta.env.VITE_AUTH0_AUDIENCE,
+      redirect_uri: import.meta.env.VITE_AUTH0_REDIRECT_URI
+    }
+  })
+);
 
-// 2️⃣ Instalar plugins principales
-app.use(auth0Plugin);
 app.use(router);
-
-// 3️⃣ Montar app
 app.mount('#app');
-
-// 4️⃣ Esperar a que Auth0 se inicialice y entonces configurar Axios
-import { watch } from 'vue';
-import { useAuth0 } from '@auth0/auth0-vue';
-
-app.mixin({
-  mounted() {
-    // ✅ Usamos `useAuth0()` dentro de un contexto Válido (setup-reactivo)
-    const auth = useAuth0();
-
-    watch(
-      () => auth.isAuthenticated.value,
-      async (isAuth) => {
-        if (isAuth) {
-          try {
-            const token = await auth.getAccessTokenSilently({
-              authorizationParams: { audience: 'https://api.ucochallenge.com' },
-            });
-
-            console.log('🔐 Access Token obtenido correctamente:', token);
-            setupAxiosInterceptor(auth);
-          } catch (err) {
-            console.error('❌ Error al obtener token:', err);
-          }
-        }
-      },
-      { immediate: true }
-    );
-  },
-});

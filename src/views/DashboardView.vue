@@ -184,7 +184,7 @@ const logout = () => {
 };
 
 const goToRegister = () => {
-  router.push({ name: 'RegisterUser' });
+  router.push({ name: 'register' });
 };
 
 const fetchData = async () => {

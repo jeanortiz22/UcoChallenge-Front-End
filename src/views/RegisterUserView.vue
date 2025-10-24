@@ -222,7 +222,7 @@ const successMessage = ref('');
 const errorMessage = ref('');
 
 const goBack = () => {
-  router.push({ name: 'Dashboard' });
+  router.push({ name: 'dashboard' });
 };
 
 // Cargar tipos de identificación

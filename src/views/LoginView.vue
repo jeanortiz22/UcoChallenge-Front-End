@@ -1,41 +1,48 @@
+<script setup>
+import { useAuth0 } from '@auth0/auth0-vue'
+import { watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0()
+const router = useRouter()
+
+// Si Auth0 termina de cargar y el usuario está autenticado → dashboard
+watch([isLoading, isAuthenticated], () => {
+  if (!isLoading.value && isAuthenticated.value) {
+    router.push('/dashboard')
+  }
+})
+</script>
+
 <template>
   <div class="login-container">
-    <h2>Inicio de Sesión Delegado (Auth0)</h2>
-    <button v-if="!isAuthenticated && !isLoading" @click="login">
-        Ingresar con Auth0
-    </button>
-    <p v-else-if="isLoading">Cargando estado de la sesión...</p>
-    <p v-else>Sesión activa. Redirigiendo a Dashboard...</p> 
+    <h2>Inicio de Sesion Delegado (Auth0)</h2>
+
+    <div v-if="isLoading.value">
+      <p>Cargando estado de la sesion...</p>
+    </div>
+
+    <div v-else-if="!isAuthenticated.value">
+      <button @click="loginWithRedirect()">Iniciar Sesion</button>
+    </div>
+
+    <div v-else>
+      <p>Redirigiendo...</p>
+    </div>
   </div>
 </template>
 
-<script setup>
-import { onMounted, watch } from 'vue'; // ✅ Importar watch también
-import { useRouter } from 'vue-router';
-import { useAuth0 } from '@auth0/auth0-vue';
-
-const router = useRouter();
-const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
-
-// Función de redirección
-const login = () => {
-  loginWithRedirect(); 
-};
-
-// 🔄 Observar cambios en la autenticación
-watch([isAuthenticated, isLoading], ([auth, loading]) => {
-  // Redirigir solo cuando termine de cargar Y esté autenticado
-  if (!loading && auth) {
-    console.log('✅ Usuario autenticado, redirigiendo al panel de control...');
-    router.push({ name: 'Dashboard' });
-  }
-}, { immediate: true }); // immediate: true ejecuta inmediatamente al montar
-
-</script>
-
 <style scoped>
 .login-container {
-    text-align: center;
-    padding: 50px;
+  max-width: 400px;
+  margin: 100px auto;
+  padding: 25px;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  text-align: center;
+}
+button {
+  padding: 10px 20px;
+  cursor: pointer;
 }
 </style>

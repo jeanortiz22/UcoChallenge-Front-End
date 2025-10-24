@@ -1,28 +1,23 @@
 import axios from 'axios';
+import { useAuth0 } from '@auth0/auth0-vue';
 
-const axiosInstance = axios.create({
-  baseURL: 'http://localhost:8081', // Gateway
-  headers: {
-    'Content-Type': 'application/json',
-  },
+const apiClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
 });
 
-export function setupAxiosInterceptor(auth) {
-  axiosInstance.interceptors.request.use(async (config) => {
-    if (auth.isAuthenticated.value) {
-      try {
-        const accessToken = await auth.getAccessTokenSilently({
-          authorizationParams: {
-            audience: 'https://api.ucochallenge.com', // Tu API
-          },
-        });
-        config.headers.Authorization = `Bearer ${accessToken}`;
-      } catch (error) {
-        console.error('Error al obtener el Access Token de Auth0:', error);
-      }
+apiClient.interceptors.request.use(async (config) => {
+  const { getAccessTokenSilently } = useAuth0();
+  const token = await getAccessTokenSilently({
+    authorizationParams: {
+      audience: import.meta.env.VITE_AUTH0_AUDIENCE
     }
-    return config;
   });
-}
 
-export default axiosInstance;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
+
+export default apiClient;
