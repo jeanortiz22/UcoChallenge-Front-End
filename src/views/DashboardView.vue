@@ -145,8 +145,10 @@ import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
 
+
 const router = useRouter();
 const { logout: auth0Logout } = useAuth0();
+const { getAccessTokenSilently } = useAuth0();
 
 const users = ref([]);
 const isLoading = ref(false);
@@ -270,10 +272,22 @@ const previousPage = () => {
   }
 };
 
-// Load data on mount
-onMounted(() => {
-  fetchData();
+onMounted(async () => {
+  try {
+    const token = await getAccessTokenSilently({
+      authorizationParams: {
+        audience: import.meta.env.VITE_AUTH0_AUDIENCE
+      }
+    });
+    
+    console.log('🔐 Access Token Auth0:', token);
+
+    await fetchData(); // ← ahora se ejecuta después del token
+  } catch (e) {
+    console.error('❌ Error obteniendo token en dashboard:', e);
+  }
 });
+
 </script>
 
 <style scoped>
