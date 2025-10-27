@@ -204,10 +204,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-// Asegúrate de que esta ruta sea correcta para tu proyecto
-import axiosInstance from '../http/axiosInstance';
-import { useAuthorization } from '../composables/useAuthorization';
-import { DASHBOARD_REQUIRED_ROLES } from '../constants/authorization';
+import axiosInstance from '../http/axiosInstance'; 
 
 const router = useRouter();
 const { hasAllRoles, loadClaims, isLoadingClaims } = useAuthorization();
@@ -227,18 +224,20 @@ const formData = ref({
   secondName: '',
   firstSurname: '',
   secondSurname: '',
-  country: '',    // NUEVO: UUID del país
-  department: '', // NUEVO: UUID del departamento
-  homeCity: '',   // UUID de la ciudad
+  country: '',  
+  department: '',
+  homeCity: '',   
   email: '', 
   mobileNumber: ''
 });
 
 // Catálogos
 const tiposIdentificacion = ref([]);
-const paises = ref([]); 
-const departamentos = ref([]); 
+const paises = ref([]);
+const departamentos = ref([]);
 const ciudades = ref([]);
+
+const ensureArray = (data) => (Array.isArray(data) ? data : []);
 
 // Estados
 const isSubmitting = ref(false);
@@ -249,18 +248,18 @@ const goBack = () => {
   router.push({ name: 'dashboard' });
 };
 
-// Cargar tipos de identificación
+// Cargar tipos de identificaciOn
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/tipos-identificacion');
-    tiposIdentificacion.value = response.data;
+    tiposIdentificacion.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los tipos de identificación')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar tipos de identificación:', error);
-    // Valores por defecto (Fallback)
-    tiposIdentificacion.value = [
-      { id: '00000000-0000-0000-0000-000000000001', nombre: 'Cédula de Ciudadanía' },
-      { id: '00000000-0000-0000-0000-000000000002', nombre: 'Cédula de Extranjería' },
-    ];
+    tiposIdentificacion.value = [];
+    errorMessage.value = 'No se pudieron cargar los tipos de identificación. Intenta nuevamente.';
   }
 };
 
@@ -268,18 +267,18 @@ const loadIdentificationTypes = async () => {
 const loadCountries = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/paises');
-    paises.value = response.data;
+    paises.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los países')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar países:', error);
-    // Valores por defecto (Fallback)
-    paises.value = [
-      { id: '00000000-0000-0000-0000-000000000099', nombre: 'Colombia' },
-      { id: '00000000-0000-0000-0000-000000000098', nombre: 'México' },
-    ];
+    paises.value = [];
+    errorMessage.value = 'No se pudieron cargar los países. Intenta nuevamente.';
   }
 };
 
-// Cargar departamentos (depende del país)
+// Cargar departamentos
 const loadDepartments = async (countryId) => {
   // Limpiar selecciones dependientes
   departamentos.value = [];
@@ -291,16 +290,14 @@ const loadDepartments = async (countryId) => {
 
   try {
     const response = await axiosInstance.get(`/api/v1/paises/${countryId}/departamentos`);
-    departamentos.value = response.data;
+    departamentos.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los departamentos')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar departamentos:', error);
-    // Valores por defecto (Fallback)
-    if (countryId === '00000000-0000-0000-0000-000000000099') { // Colombia
-      departamentos.value = [
-        { id: '00000000-0000-0000-0000-000000000080', nombre: 'Antioquia' },
-        { id: '00000000-0000-0000-0000-000000000081', nombre: 'Cundinamarca' },
-      ];
-    } 
+    departamentos.value = [];
+    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.'; 
   }
 };
 
@@ -314,20 +311,14 @@ const loadCities = async (departmentId) => {
 
   try {
     const response = await axiosInstance.get(`/api/v1/departamentos/${departmentId}/ciudades`);
-    ciudades.value = response.data;
+    ciudades.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar las ciudades')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar ciudades:', error);
-    // Valores por defecto (Fallback)
-    if (departmentId === '00000000-0000-0000-0000-000000000080') { // Antioquia
-      ciudades.value = [
-        { id: '00000000-0000-0000-0000-000000000010', nombre: 'Rionegro' },
-        { id: '00000000-0000-0000-0000-000000000011', nombre: 'Medellín' },
-      ];
-    } else if (departmentId === '00000000-0000-0000-0000-000000000081') { // Cundinamarca
-      ciudades.value = [
-        { id: '00000000-0000-0000-0000-000000000012', nombre: 'Bogotá' },
-      ];
-    } 
+    ciudades.value = [];
+    errorMessage.value = 'No se pudieron cargar las ciudades. Intenta nuevamente.';
   }
 };
 
