@@ -1,154 +1,166 @@
 <template>
   <div class="dashboard-container">
-    <!-- Header -->
-    <div class="header">
-      <div>
-        <h1>Panel de Control de Administrador</h1>
-        <p class="welcome-text">¡Bienvenido! (Autenticado con Auth0)</p>
-      </div>
-      <div class="header-actions">
-        <button @click="goToRegister" class="btn-primary">
-          + Agregar Usuario
-        </button>
-        <button @click="logout" class="btn-logout">
-          Cerrar Sesión
-        </button>
+    <div v-if="!canManageUsers" class="unauthorized">
+      <h1>Acceso restringido</h1>
+      <p>No tienes los permisos necesarios para ver esta sección.</p>
+      <div class="unauthorized-actions">
+        <button @click="goToHome" class="btn-secondary">Ir al inicio</button>
+        <button @click="logout" class="btn-logout">Cerrar Sesión</button>
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="isLoading" class="loading">
-      <p>Cargando usuarios...</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="apiError" class="error-message">
-      <p>❌ Error al cargar datos: {{ apiError }}</p>
-      <button @click="fetchData" class="btn-retry">Reintentar</button>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else-if="users.length === 0" class="empty-state">
-      <p>📋 No hay usuarios registrados en el sistema</p>
-      <button @click="goToRegister" class="btn-primary">
-        Registrar Primer Usuario
-      </button>
-    </div>
-
-    <!-- Users Table -->
-    <div v-else class="users-section">
-      <div class="table-header">
-        <h3>Usuarios Registrados ({{ users.length }} total)</h3>
-        <button @click="fetchData" class="btn-refresh">🔄 Actualizar</button>
-      </div>
-
-      <div class="table-container">
-        <table class="users-table">
-          <thead>
-            <tr>
-              <th>Nombre Completo</th>
-              <th>Identificación</th>
-              <th>Email</th>
-              <th>Teléfono</th>
-              <th>Ciudad</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in paginatedUsers" :key="user.id">
-              <td class="name-column">
-                {{ user.primerNombre }} {{ user.segundoNombre || '' }} 
-                {{ user.primerApellido }} {{ user.segundoApellido || '' }}
-              </td>
-              <td>
-                <span class="id-badge">{{ user.tipoIdentificacion }}</span>
-                {{ user.numeroIdentificacion }}
-              </td>
-              <td>{{ user.email }}</td>
-              <td>{{ user.telefonoMovil || 'N/A' }}</td>
-              <td>{{ user.ciudadResidencia || 'N/A' }}</td>
-              <td>
-                <span :class="getStatusClass(user)">
-                  {{ getStatusText(user) }}
-                </span>
-              </td>
-              <td class="actions-column">
-                <button 
-                  v-if="!user.emailConfirmado"
-                  @click="confirmEmail(user.id)"
-                  class="btn-action btn-email"
-                  title="Confirmar Email"
-                >
-                  📧 Email
-                </button>
-                <button 
-                  v-if="!user.telefonoMovilConfirmado && user.telefonoMovil"
-                  @click="confirmPhone(user.id)"
-                  class="btn-action btn-phone"
-                  title="Confirmar Teléfono"
-                >
-                  📱 Teléfono
-                </button>
-                <span v-if="user.emailConfirmado && user.telefonoMovilConfirmado" class="authenticated">
-                  ✓ Autenticado
-                </span>
-                <span v-else-if="user.emailConfirmado && !user.telefonoMovilConfirmado" class="partial">
-                  ✓ Email OK
-                </span>
-                <span v-else-if="!user.emailConfirmado && user.telefonoMovilConfirmado" class="partial">
-                  ✓ Tel OK
-                </span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Pagination -->
-      <div class="pagination">
-        <button 
-          @click="previousPage" 
-          :disabled="currentPage === 1"
-          class="btn-page"
-        >
-          ← Anterior
-        </button>
-        
-        <div class="page-info">
-          Página {{ currentPage }} de {{ totalPages }}
-          <span class="page-range">
-            ({{ rangeStart }} - {{ rangeEnd }} de {{ users.length }})
-          </span>
+    <div v-else class="dashboard-content">
+      <!-- Header -->
+      <div class="header">
+        <div>
+          <h1>Panel de Control de Administrador</h1>
+          <p class="welcome-text">¡Bienvenido! (Autenticado con Auth0)</p>
         </div>
-        
-        <button 
-          @click="nextPage" 
-          :disabled="currentPage === totalPages"
-          class="btn-page"
-        >
-          Siguiente →
+        <div class="header-actions">
+          <button @click="goToRegister" class="btn-primary">
+            + Agregar Usuario
+          </button>
+          <button @click="logout" class="btn-logout">
+            Cerrar Sesión
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="isLoading" class="loading">
+        <p>Cargando usuarios...</p>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="apiError" class="error-message">
+        <p>❌ Error al cargar datos: {{ apiError }}</p>
+        <button @click="fetchData" class="btn-retry">Reintentar</button>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="users.length === 0" class="empty-state">
+        <p>📋 No hay usuarios registrados en el sistema</p>
+        <button @click="goToRegister" class="btn-primary">
+          Registrar Primer Usuario
         </button>
       </div>
-    </div>
 
-    <!-- Success Message -->
-    <div v-if="successMessage" class="success-message">
-      {{ successMessage }}
+      <!-- Users Table -->
+      <div v-else class="users-section">
+        <div class="table-header">
+          <h3>Usuarios Registrados ({{ users.length }} total)</h3>
+          <button @click="fetchData" class="btn-refresh">🔄 Actualizar</button>
+        </div>
+
+        <div class="table-container">
+          <table class="users-table">
+            <thead>
+              <tr>
+                <th>Nombre Completo</th>
+                <th>Identificación</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Ciudad</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="user in paginatedUsers" :key="user.id">
+                <td class="name-column">
+                  {{ user.primerNombre }} {{ user.segundoNombre || '' }}
+                  {{ user.primerApellido }} {{ user.segundoApellido || '' }}
+                </td>
+                <td>
+                  <span class="id-badge">{{ user.tipoIdentificacion }}</span>
+                  {{ user.numeroIdentificacion }}
+                </td>
+                <td>{{ user.email }}</td>
+                <td>{{ user.telefonoMovil || 'N/A' }}</td>
+                <td>{{ user.ciudadResidencia || 'N/A' }}</td>
+                <td>
+                  <span :class="getStatusClass(user)">
+                    {{ getStatusText(user) }}
+                  </span>
+                </td>
+                <td class="actions-column">
+                  <button
+                    v-if="!user.emailConfirmado"
+                    @click="confirmEmail(user.id)"
+                    class="btn-action btn-email"
+                    title="Confirmar Email"
+                  >
+                    📧 Email
+                  </button>
+                  <button
+                    v-if="!user.telefonoMovilConfirmado && user.telefonoMovil"
+                    @click="confirmPhone(user.id)"
+                    class="btn-action btn-phone"
+                    title="Confirmar Teléfono"
+                  >
+                    📱 Teléfono
+                  </button>
+                  <span v-if="user.emailConfirmado && user.telefonoMovilConfirmado" class="authenticated">
+                    ✓ Autenticado
+                  </span>
+                  <span v-else-if="user.emailConfirmado && !user.telefonoMovilConfirmado" class="partial">
+                    ✓ Email OK
+                  </span>
+                  <span v-else-if="!user.emailConfirmado && user.telefonoMovilConfirmado" class="partial">
+                    ✓ Tel OK
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination">
+          <button
+            @click="previousPage"
+            :disabled="currentPage === 1"
+            class="btn-page"
+          >
+            ← Anterior
+          </button>
+
+          <div class="page-info">
+            Página {{ currentPage }} de {{ totalPages }}
+            <span class="page-range">
+              ({{ rangeStart }} - {{ rangeEnd }} de {{ users.length }})
+            </span>
+          </div>
+
+          <button
+            @click="nextPage"
+            :disabled="currentPage === totalPages"
+            class="btn-page"
+          >
+            Siguiente →
+          </button>
+        </div>
+      </div>
+
+      <!-- Success Message -->
+      <div v-if="successMessage" class="success-message">
+        {{ successMessage }}
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
-
+import { useAuthorization } from '../composables/useAuthorization';
+import { DASHBOARD_REQUIRED_ROLES } from '../constants/authorization';
 
 const router = useRouter();
-const { logout: auth0Logout } = useAuth0();
-const { getAccessTokenSilently } = useAuth0();
+const { logout: auth0Logout, getAccessTokenSilently } = useAuth0();
+const { hasAllRoles } = useAuthorization();
 
 const users = ref([]);
 const isLoading = ref(false);
@@ -156,11 +168,18 @@ const apiError = ref(null);
 const successMessage = ref(null);
 const currentPage = ref(1);
 const itemsPerPage = 10;
+const hasInitialized = ref(false);
+
+const canManageUsers = computed(() => hasAllRoles(DASHBOARD_REQUIRED_ROLES));
 
 // Computed properties
-const totalPages = computed(() => Math.ceil(users.value.length / itemsPerPage));
+const totalPages = computed(() => Math.ceil(users.value.length / itemsPerPage) || 1);
 
 const paginatedUsers = computed(() => {
+  if (users.value.length === 0) {
+    return [];
+  }
+
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
   return users.value.slice(start, end);
@@ -172,16 +191,17 @@ const rangeStart = computed(() => {
 });
 
 const rangeEnd = computed(() => {
+  if (users.value.length === 0) return 0;
   const end = currentPage.value * itemsPerPage;
   return end > users.value.length ? users.value.length : end;
 });
 
 // Methods
 const logout = () => {
-  auth0Logout({ 
-    logoutParams: { 
+  auth0Logout({
+    logoutParams: {
       returnTo: window.location.origin
-    } 
+    }
   });
 };
 
@@ -189,18 +209,22 @@ const goToRegister = () => {
   router.push({ name: 'register' });
 };
 
+const goToHome = () => {
+  router.push({ name: 'login' });
+};
+
 const fetchData = async () => {
   isLoading.value = true;
   apiError.value = null;
   successMessage.value = null;
-  
+
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
     users.value = response.data;
     console.log('✅ Usuarios cargados:', response.data);
   } catch (error) {
-    apiError.value = error.response 
-      ? `Error ${error.response.status}` 
+    apiError.value = error.response
+      ? `Error ${error.response.status}`
       : 'Error de conexión';
     console.error('❌ Error al obtener usuarios:', error);
   } finally {
@@ -212,11 +236,11 @@ const confirmEmail = async (userId) => {
   try {
     await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-email`);
     successMessage.value = '✅ Email confirmado exitosamente';
-    
+
     // Actualizar el usuario en la lista local
     const user = users.value.find(u => u.id === userId);
     if (user) user.emailConfirmado = true;
-    
+
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
     apiError.value = 'Error al confirmar email';
@@ -228,11 +252,11 @@ const confirmPhone = async (userId) => {
   try {
     await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-phone`);
     successMessage.value = '✅ Teléfono confirmado exitosamente';
-    
+
     // Actualizar el usuario en la lista local
     const user = users.value.find(u => u.id === userId);
     if (user) user.telefonoMovilConfirmado = true;
-    
+
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
     apiError.value = 'Error al confirmar teléfono';
@@ -272,22 +296,41 @@ const previousPage = () => {
   }
 };
 
-onMounted(async () => {
+const initializeDashboard = async () => {
   try {
     const token = await getAccessTokenSilently({
       authorizationParams: {
         audience: import.meta.env.VITE_AUTH0_AUDIENCE
       }
     });
-    
+
     console.log('🔐 Access Token Auth0:', token);
 
-    await fetchData(); // ← ahora se ejecuta después del token
+    await fetchData();
   } catch (e) {
+    apiError.value = 'No se pudo inicializar el panel de control';
     console.error('❌ Error obteniendo token en dashboard:', e);
   }
-});
+};
 
+watch(
+  () => canManageUsers.value,
+  async (allowed) => {
+    if (!allowed) {
+      users.value = [];
+      hasInitialized.value = false;
+      return;
+    }
+
+    if (hasInitialized.value) {
+      return;
+    }
+
+    hasInitialized.value = true;
+    await initializeDashboard();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
@@ -295,6 +338,12 @@ onMounted(async () => {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
+}
+
+.dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .header {
@@ -404,27 +453,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.table-header h3 {
-  margin: 0;
-  color: #333;
-}
-
-.btn-refresh {
-  padding: 8px 16px;
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn-refresh:hover {
-  background-color: #0b7dda;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .table-container {
@@ -436,70 +465,32 @@ onMounted(async () => {
   border-collapse: collapse;
 }
 
-.users-table thead {
-  background-color: #f8f9fa;
-}
-
-.users-table th {
-  padding: 12px;
-  text-align: left;
-  font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-  font-size: 14px;
-}
-
+.users-table th,
 .users-table td {
-  padding: 12px;
-  border-bottom: 1px solid #dee2e6;
-  font-size: 14px;
-}
-
-.users-table tbody tr:hover {
-  background-color: #f8f9fa;
+  padding: 15px;
+  text-align: left;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .name-column {
-  font-weight: 500;
-  color: #333;
+  font-weight: 600;
 }
 
 .id-badge {
   display: inline-block;
-  padding: 2px 6px;
-  background-color: #e3f2fd;
-  color: #1976d2;
-  border-radius: 3px;
+  padding: 4px 8px;
+  margin-right: 8px;
+  background-color: #e0f7fa;
+  color: #00796b;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
-  margin-right: 5px;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.status-badge.authenticated {
-  background-color: #c8e6c9;
-  color: #2e7d32;
-}
-
-.status-badge.partial {
-  background-color: #fff9c4;
-  color: #f57f17;
-}
-
-.status-badge.pending {
-  background-color: #ffcdd2;
-  color: #c62828;
 }
 
 .actions-column {
-  white-space: nowrap;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .btn-action {
@@ -507,53 +498,47 @@ onMounted(async () => {
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
-  margin-right: 5px;
-  transition: opacity 0.3s;
-}
-
-.btn-action:hover {
-  opacity: 0.8;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .btn-email {
-  background-color: #2196F3;
+  background-color: #1976D2;
   color: white;
 }
 
 .btn-phone {
-  background-color: #FF9800;
+  background-color: #388E3C;
   color: white;
 }
 
-.authenticated, .partial {
-  font-size: 12px;
+.authenticated {
+  color: #2e7d32;
   font-weight: 600;
-  color: #4CAF50;
+}
+
+.partial {
+  color: #f9a825;
+  font-weight: 600;
 }
 
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-top: 1px solid #dee2e6;
+  padding: 15px 20px;
+  background-color: #fafafa;
+  border-top: 1px solid #e0e0e0;
 }
 
 .btn-page {
   padding: 8px 16px;
-  background-color: #fff;
-  border: 1px solid #dee2e6;
+  background-color: #eeeeee;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.btn-page:hover:not(:disabled) {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
 }
 
 .btn-page:disabled {
@@ -563,65 +548,41 @@ onMounted(async () => {
 
 .page-info {
   font-size: 14px;
-  color: #495057;
+  color: #555;
 }
 
 .page-range {
-  color: #6c757d;
-  font-size: 13px;
+  margin-left: 8px;
+  color: #888;
 }
 
 .success-message {
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  background-color: #c8e6c9;
+  margin-top: 20px;
+  padding: 15px;
+  background-color: #e8f5e9;
+  border: 1px solid #81c784;
   color: #2e7d32;
-  padding: 15px 20px;
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 1000;
-  animation: slideIn 0.3s ease-out;
+  text-align: center;
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+.unauthorized {
+  text-align: center;
+  padding: 60px 20px;
+  background-color: #fff3e0;
+  border-radius: 8px;
+  border: 1px solid #ffcc80;
 }
 
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .table-container {
-    font-size: 12px;
-  }
-  
-  .users-table th,
-  .users-table td {
-    padding: 8px;
-  }
+.unauthorized h1 {
+  margin-bottom: 10px;
+  color: #f57c00;
 }
 
-.text-green {
-  color: #00b37e; /* verde elegante */
+.unauthorized-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
 }
-
-.text-green-light {
-  color: #00d68f; /* un poco más claro para el subtítulo */
-}
-
-.welcome-text {
-  font-size: 1rem;
-  margin-top: 0.3rem;
-}
-
 </style>

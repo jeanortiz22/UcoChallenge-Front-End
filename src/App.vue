@@ -1,9 +1,15 @@
 <script setup>
+import { computed } from "vue";
 import { useAuth0 } from "@auth0/auth0-vue";
 import { useRouter } from "vue-router";
+import { useAuthorization } from "./composables/useAuthorization";
+import { DASHBOARD_REQUIRED_ROLES } from "./constants/authorization";
 
 const { loginWithRedirect, logout, user, isAuthenticated } = useAuth0();
+const { hasAllRoles } = useAuthorization();
 const router = useRouter();
+
+const canAccessDashboard = computed(() => hasAllRoles(DASHBOARD_REQUIRED_ROLES));
 
 const goDashboard = () => {
   router.push("/dashboard");
@@ -25,16 +31,21 @@ const logoutUser = () => {
       <h1 class="logo">UcoChallenge</h1>
 
       <div class="nav-actions">
-        <button 
-          v-if="!isAuthenticated" 
-          @click="loginWithRedirect" 
+        <button
+          v-if="!isAuthenticated"
+          @click="loginWithRedirect"
           class="btn-primary">
           Iniciar Sesion
         </button>
 
         <div v-else class="user-info">
           <span>Hola, {{ user.name }}</span>
-          <button @click="goDashboard" class="btn-secondary">Dashboard</button>
+          <button
+            v-if="canAccessDashboard"
+            @click="goDashboard"
+            class="btn-secondary">
+            Dashboard
+          </button>
           <button @click="logoutUser" class="btn-danger">Cerrar Sesion</button>
         </div>
       </div>
