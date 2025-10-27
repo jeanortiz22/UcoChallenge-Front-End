@@ -1,9 +1,22 @@
 <script setup>
+import { computed, onMounted } from "vue";
 import { useAuth0 } from "@auth0/auth0-vue";
 import { useRouter } from "vue-router";
+import { useAuthorization } from "./composables/useAuthorization";
+import { DASHBOARD_REQUIRED_ROLES } from "./constants/authorization";
 
 const { loginWithRedirect, logout, user, isAuthenticated } = useAuth0();
+const { hasAllRoles, loadClaims, isLoadingClaims } = useAuthorization();
 const router = useRouter();
+
+onMounted(() => {
+  loadClaims();
+});
+
+const canAccessDashboard = computed(() => hasAllRoles(DASHBOARD_REQUIRED_ROLES));
+const showDashboardButton = computed(
+  () => isLoadingClaims.value || canAccessDashboard.value
+);
 
 const goDashboard = () => {
   router.push("/dashboard");
@@ -25,16 +38,23 @@ const logoutUser = () => {
       <h1 class="logo">UcoChallenge</h1>
 
       <div class="nav-actions">
-        <button 
-          v-if="!isAuthenticated" 
-          @click="loginWithRedirect" 
+        <button
+          v-if="!isAuthenticated"
+          @click="loginWithRedirect"
           class="btn-primary">
           Iniciar Sesion
         </button>
 
         <div v-else class="user-info">
           <span>Hola, {{ user.name }}</span>
-          <button @click="goDashboard" class="btn-secondary">Dashboard</button>
+          <button
+            v-if="showDashboardButton"
+            @click="goDashboard"
+            class="btn-secondary"
+            :disabled="!canAccessDashboard"
+          >
+            {{ isLoadingClaims ? "Cargando permisos..." : "Dashboard" }}
+          </button>
           <button @click="logoutUser" class="btn-danger">Cerrar Sesion</button>
         </div>
       </div>
@@ -77,6 +97,11 @@ button {
   padding: 8px 14px;
   border: none;
   border-radius: 6px;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .btn-primary {

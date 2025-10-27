@@ -1,199 +1,223 @@
 <template>
   <div class="register-container">
-    <div class="header">
-      <h2>Registrar Nuevo Usuario</h2>
+    <div v-if="isAuthorizingRoles" class="authorization-check">
+      <h2>Validando permisos...</h2>
+      <p>Por favor espera un momento.</p>
+    </div>
+
+    <div v-else-if="!canRegisterUsers" class="unauthorized-register">
+      <h2>Acceso restringido</h2>
+      <p>No tienes permisos para registrar usuarios.</p>
       <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
     </div>
 
-    <form @submit.prevent="handleSubmit" class="register-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="firstName">Primer Nombre *</label>
-          <input 
-            id="firstName"
-            v-model="formData.firstName" 
-            type="text" 
-            required
-            placeholder="Juan"
-          />
+    <div v-else class="register-content">
+        <div class="header">
+          <h2>Registrar Nuevo Usuario</h2>
+          <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
         </div>
 
-        <div class="form-group">
-          <label for="secondName">Segundo Nombre</label>
-          <input 
-            id="secondName"
-            v-model="formData.secondName" 
-            type="text"
-            placeholder="Carlos"
-          />
-        </div>
-      </div>
+        <form @submit.prevent="handleSubmit" class="register-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstName">Primer Nombre *</label>
+              <input 
+                id="firstName"
+                v-model="formData.firstName" 
+                type="text" 
+                required
+                placeholder="Juan"
+              />
+            </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="firstSurname">Primer Apellido *</label>
-          <input 
-            id="firstSurname"
-            v-model="formData.firstSurname" 
-            type="text" 
-            required
-            placeholder="Pérez"
-          />
-        </div>
+            <div class="form-group">
+              <label for="secondName">Segundo Nombre</label>
+              <input 
+                id="secondName"
+                v-model="formData.secondName" 
+                type="text"
+                placeholder="Carlos"
+              />
+            </div>
+          </div>
 
-        <div class="form-group">
-          <label for="secondSurname">Segundo Apellido</label>
-          <input 
-            id="secondSurname"
-            v-model="formData.secondSurname" 
-            type="text"
-            placeholder="García"
-          />
-        </div>
-      </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstSurname">Primer Apellido *</label>
+              <input 
+                id="firstSurname"
+                v-model="formData.firstSurname" 
+                type="text" 
+                required
+                placeholder="Pérez"
+              />
+            </div>
 
-      <div class="form-row">
-        <div class="form-group">
-          <label for="idType">Tipo de Identificación *</label>
-          <select 
-            id="idType" 
-            v-model="formData.idType" 
-            required
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="tipo in tiposIdentificacion" 
-              :key="tipo.id" 
-              :value="tipo.id"
-            >
-              {{ tipo.nombre }}
-            </option>
-          </select>
-        </div>
+            <div class="form-group">
+              <label for="secondSurname">Segundo Apellido</label>
+              <input 
+                id="secondSurname"
+                v-model="formData.secondSurname" 
+                type="text"
+                placeholder="García"
+              />
+            </div>
+          </div>
 
-        <div class="form-group">
-          <label for="idNumber">Número de Identificación *</label>
-          <input 
-            id="idNumber"
-            v-model="formData.idNumber" 
-            type="text" 
-            required
-            placeholder="1234567890"
-          />
-        </div>
-      </div>
-      <div class="form-row location-row">
-        <div class="form-group">
-          <label for="country">País de Residencia *</label>
-          <select 
-            id="country" 
-            v-model="formData.country" 
-            required
-            @change="loadDepartments(formData.country)"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="pais in paises" 
-              :key="pais.id" 
-              :value="pais.id"
-            >
-              {{ pais.nombre }}
-            </option>
-          </select>
-        </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="idType">Tipo de Identificación *</label>
+              <select 
+                id="idType" 
+                v-model="formData.idType" 
+                required
+              >
+                <option value="">Seleccione...</option>
+                <option 
+                  v-for="tipo in tiposIdentificacion" 
+                  :key="tipo.id" 
+                  :value="tipo.id"
+                >
+                  {{ tipo.nombre }}
+                </option>
+              </select>
+            </div>
 
-        <div class="form-group">
-          <label for="department">Departamento/Estado *</label>
-          <select 
-            id="department" 
-            v-model="formData.department" 
-            required
-            :disabled="!formData.country"
-            @change="loadCities(formData.department)"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="dep in departamentos" 
-              :key="dep.id" 
-              :value="dep.id"
-            >
-              {{ dep.nombre }}
-            </option>
-          </select>
-        </div>
+            <div class="form-group">
+              <label for="idNumber">Número de Identificación *</label>
+              <input 
+                id="idNumber"
+                v-model="formData.idNumber" 
+                type="text" 
+                required
+                placeholder="1234567890"
+              />
+            </div>
+          </div>
+          <div class="form-row location-row">
+            <div class="form-group">
+              <label for="country">País de Residencia *</label>
+              <select 
+                id="country" 
+                v-model="formData.country" 
+                required
+                @change="loadDepartments(formData.country)"
+              >
+                <option value="">Seleccione...</option>
+                <option 
+                  v-for="pais in paises" 
+                  :key="pais.id" 
+                  :value="pais.id"
+                >
+                  {{ pais.nombre }}
+                </option>
+              </select>
+            </div>
 
-        <div class="form-group">
-          <label for="homeCity">Ciudad de Residencia *</label>
-          <select 
-            id="homeCity" 
-            v-model="formData.homeCity" 
-            required
-            :disabled="!formData.department"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="ciudad in ciudades" 
-              :key="ciudad.id" 
-              :value="ciudad.id"
-            >
-              {{ ciudad.nombre }}
-            </option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label for="email">Correo Electrónico *</label>
-          <input 
-            id="email"
-            v-model="formData.email" 
-            type="email" 
-            required
-            placeholder="usuario@ucochallenge.com"
-          />
-        </div>
+            <div class="form-group">
+              <label for="department">Departamento/Estado *</label>
+              <select 
+                id="department" 
+                v-model="formData.department" 
+                required
+                :disabled="!formData.country"
+                @change="loadCities(formData.department)"
+              >
+                <option value="">Seleccione...</option>
+                <option 
+                  v-for="dep in departamentos" 
+                  :key="dep.id" 
+                  :value="dep.id"
+                >
+                  {{ dep.nombre }}
+                </option>
+              </select>
+            </div>
 
-        <div class="form-group">
-          <label for="mobileNumber">Teléfono Móvil</label>
-          <input 
-            id="mobileNumber"
-            v-model="formData.mobileNumber" 
-            type="tel"
-            placeholder="3001234567"
-          />
-        </div>
-      </div>
+            <div class="form-group">
+              <label for="homeCity">Ciudad de Residencia *</label>
+              <select 
+                id="homeCity" 
+                v-model="formData.homeCity" 
+                required
+                :disabled="!formData.department"
+              >
+                <option value="">Seleccione...</option>
+                <option 
+                  v-for="ciudad in ciudades" 
+                  :key="ciudad.id" 
+                  :value="ciudad.id"
+                >
+                  {{ ciudad.nombre }}
+                </option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email">Correo Electrónico *</label>
+              <input 
+                id="email"
+                v-model="formData.email" 
+                type="email" 
+                required
+                placeholder="usuario@ucochallenge.com"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="mobileNumber">Teléfono Móvil</label>
+              <input 
+                id="mobileNumber"
+                v-model="formData.mobileNumber" 
+                type="tel"
+                placeholder="3001234567"
+              />
+            </div>
+          </div>
 
 
 
-      <div class="form-actions">
-        <button type="submit" class="btn-submit" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
-        </button>
-        <button type="button" @click="resetForm" class="btn-reset">
-          Limpiar Formulario
-        </button>
-      </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-submit" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
+            </button>
+            <button type="button" @click="resetForm" class="btn-reset">
+              Limpiar Formulario
+            </button>
+          </div>
 
-      <div v-if="successMessage" class="message success">
-        {{ successMessage }}
-      </div>
-      
-      <div v-if="errorMessage" class="message error">
-        {{ errorMessage }}
-      </div>
-    </form>
+          <div v-if="successMessage" class="message success">
+            {{ successMessage }}
+          </div>
+          
+          <div v-if="errorMessage" class="message error">
+            {{ errorMessage }}
+          </div>
+        </form>
+
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 // Asegúrate de que esta ruta sea correcta para tu proyecto
-import axiosInstance from '../http/axiosInstance'; 
+import axiosInstance from '../http/axiosInstance';
+import { useAuthorization } from '../composables/useAuthorization';
+import { DASHBOARD_REQUIRED_ROLES } from '../constants/authorization';
 
 const router = useRouter();
+const { hasAllRoles, loadClaims, isLoadingClaims } = useAuthorization();
+onMounted(() => {
+  loadClaims();
+});
+const canRegisterUsers = computed(() => hasAllRoles(DASHBOARD_REQUIRED_ROLES));
+const isAuthorizingRoles = computed(
+  () => isLoadingClaims.value && !canRegisterUsers.value
+);
 
 // Form data matching RegisterUserDomain + new location fields
 const formData = ref({
@@ -308,6 +332,10 @@ const loadCities = async (departmentId) => {
 };
 
 const handleSubmit = async () => {
+  if (!canRegisterUsers.value) {
+    return;
+  }
+
   isSubmitting.value = true;
   successMessage.value = '';
   errorMessage.value = '';
@@ -334,7 +362,7 @@ const handleSubmit = async () => {
     
     // Redirigir al dashboard después de 2 segundos
     setTimeout(() => {
-      router.push({ name: 'Dashboard' });
+      router.push({ name: 'dashboard' });
     }, 2000);
     
   } catch (error) {
@@ -379,11 +407,19 @@ const resetForm = () => {
   errorMessage.value = '';
 };
 
-// Cargar catálogos iniciales al montar el componente
-onMounted(() => {
-  loadIdentificationTypes();
-  loadCountries(); 
-});
+watch(
+  () => canRegisterUsers.value,
+  (allowed) => {
+    if (!allowed) {
+      return;
+    }
+
+    loadIdentificationTypes();
+    loadCountries();
+  },
+  { immediate: true }
+);
+
 </script>
 
 <style scoped>
@@ -401,6 +437,46 @@ onMounted(() => {
 
 .register-container:hover {
   transform: translateY(-3px);
+}
+
+.register-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.authorization-check {
+  text-align: center;
+  padding: 40px 20px;
+  margin-bottom: 30px;
+  background: rgba(129, 199, 132, 0.1);
+  border: 1px solid rgba(129, 199, 132, 0.4);
+  border-radius: 12px;
+  color: #a5d6a7;
+}
+
+.authorization-check h2 {
+  margin-bottom: 10px;
+  color: #81c784;
+}
+
+.unauthorized-register {
+  text-align: center;
+  padding: 40px 20px;
+  margin-bottom: 30px;
+  background: rgba(255, 183, 77, 0.1);
+  border: 1px solid rgba(255, 183, 77, 0.4);
+  border-radius: 12px;
+  color: #ffcc80;
+}
+
+.unauthorized-register h2 {
+  margin-bottom: 10px;
+  color: #ffa726;
+}
+
+.unauthorized-register p {
+  margin-bottom: 16px;
 }
 
 .header {
