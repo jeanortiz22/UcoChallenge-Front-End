@@ -308,13 +308,11 @@ const previousPage = () => {
 
 onMounted(async () => {
   try {
-    const token = await getAccessTokenSilently({
+    await getAccessTokenSilently({
       authorizationParams: {
         audience: import.meta.env.VITE_AUTH0_AUDIENCE
       }
     });
-
-    console.info('🔐 Token de acceso Auth0:', token);
 
     await fetchData();
   } catch (error) {

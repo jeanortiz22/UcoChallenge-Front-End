@@ -227,7 +227,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-// Asegúrate de que esta ruta sea correcta para tu proyecto
 import axiosInstance from '../http/axiosInstance'; 
 
 const router = useRouter();
@@ -240,9 +239,9 @@ const formData = ref({
   secondName: '',
   firstSurname: '',
   secondSurname: '',
-  country: '',    // NUEVO: UUID del país
-  department: '', // NUEVO: UUID del departamento
-  homeCity: '',   // UUID de la ciudad
+  country: '',  
+  department: '',
+  homeCity: '',   
   email: '', 
   mobileNumber: ''
 });
@@ -264,7 +263,7 @@ const goBack = () => {
   router.push({ name: 'dashboard' });
 };
 
-// Cargar tipos de identificación
+// Cargar tipos de identificaciOn
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/tipos-identificacion');
@@ -294,7 +293,7 @@ const loadCountries = async () => {
   }
 };
 
-// Cargar departamentos (depende del país)
+// Cargar departamentos
 const loadDepartments = async (countryId) => {
   // Limpiar selecciones dependientes
   departamentos.value = [];
@@ -645,11 +644,6 @@ onMounted(() => {
   transition: all 0.3s ease;
   background: rgba(15, 23, 42, 0.65);
   color: #f1f5f9;
-}
-
-.form-group select option {
-  color: #0f172a;
-  background-color: #f8fafc;
 }
 
 .form-group input::placeholder {
