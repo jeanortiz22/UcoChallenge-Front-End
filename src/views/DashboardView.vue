@@ -1,141 +1,156 @@
 <template>
-  <div class="dashboard-container">
-    <!-- Header -->
-    <div class="header">
+  <div class="dashboard-shell">
+    <div class="background-visuals" aria-hidden="true">
+      <div class="orb orb-one"></div>
+      <div class="orb orb-two"></div>
+    </div>
+
+    <header class="dashboard-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">Panel de control</p>
+        <h1>Gestiona y verifica a tus delegados con claridad</h1>
+        <p>
+          Visualiza el estado de autenticación de cada usuario, confirma canales
+          pendientes y mantén tu organización sincronizada en tiempo real.
+        </p>
+        <div class="hero-actions">
+          <button @click="goToRegister" class="btn btn-primary">
+            + Registrar nuevo usuario
+          </button>
+          <button @click="logout" class="btn btn-ghost">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+      <div class="hero-summary">
+        <div class="summary-card">
+          <p class="summary-label">Usuarios totales</p>
+          <p class="summary-value">{{ totalUsers }}</p>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Autenticados</p>
+          <p class="summary-value positive">{{ verifiedUsers }}</p>
+          <span class="summary-foot">{{ verifiedRate }}% del total</span>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Pendientes</p>
+          <p class="summary-value warning">{{ pendingUsers }}</p>
+          <span class="summary-foot">{{ partialUsers }} con avances</span>
+        </div>
+      </div>
+    </header>
+
+    <section v-if="isLoading" class="state-card">
+      <span class="spinner" aria-hidden="true"></span>
+      <p>Cargando usuarios…</p>
+    </section>
+
+    <section v-else-if="apiError" class="state-card error">
       <div>
-        <h1>Panel de Control de Administrador</h1>
-        <p class="welcome-text">¡Bienvenido! (Autenticado con Auth0)</p>
+        <h2>Hubo un problema al conectar</h2>
+        <p>{{ apiError }}</p>
       </div>
-      <div class="header-actions">
-        <button @click="goToRegister" class="btn-primary">
-          + Agregar Usuario
-        </button>
-        <button @click="logout" class="btn-logout">
-          Cerrar Sesión
-        </button>
-      </div>
-    </div>
+      <button @click="fetchData" class="btn btn-primary">Reintentar</button>
+    </section>
 
-    <!-- Loading State -->
-    <div v-if="isLoading" class="loading">
-      <p>Cargando usuarios...</p>
-    </div>
-
-    <!-- Error State -->
-    <div v-else-if="apiError" class="error-message">
-      <p>❌ Error al cargar datos: {{ apiError }}</p>
-      <button @click="fetchData" class="btn-retry">Reintentar</button>
-    </div>
-
-    <!-- Empty State -->
-    <div v-else-if="users.length === 0" class="empty-state">
-      <p>📋 No hay usuarios registrados en el sistema</p>
-      <button @click="goToRegister" class="btn-primary">
-        Registrar Primer Usuario
+    <section v-else-if="users.length === 0" class="state-card empty">
+      <h2>Aún no tienes usuarios registrados</h2>
+      <p>Comienza registrando a tu primer delegado en la plataforma.</p>
+      <button @click="goToRegister" class="btn btn-primary">
+        Registrar primer usuario
       </button>
-    </div>
+    </section>
 
-    <!-- Users Table -->
-    <div v-else class="users-section">
-      <div class="table-header">
-        <h3>Usuarios Registrados ({{ users.length }} total)</h3>
-        <button @click="fetchData" class="btn-refresh">🔄 Actualizar</button>
+    <section v-else class="data-section">
+      <div class="data-header">
+        <div>
+          <h2>Usuarios registrados</h2>
+          <p>Visualiza rápidamente el estado de autenticación de cada persona.</p>
+        </div>
+        <button @click="fetchData" class="btn btn-ghost">Actualizar</button>
       </div>
 
-      <div class="table-container">
-        <table class="users-table">
+      <div class="table-wrapper">
+        <table>
           <thead>
             <tr>
-              <th>Nombre Completo</th>
+              <th>Nombre completo</th>
               <th>Identificación</th>
-              <th>Email</th>
-              <th>Teléfono</th>
-              <th>Ciudad</th>
+              <th>Contacto</th>
+              <th>Ubicación</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in paginatedUsers" :key="user.id">
-              <td class="name-column">
-                {{ user.primerNombre }} {{ user.segundoNombre || '' }} 
-                {{ user.primerApellido }} {{ user.segundoApellido || '' }}
+              <td class="name-cell">
+                <p class="primary">{{ formatFullName(user) }}</p>
+                <p class="secondary">{{ user.email }}</p>
               </td>
               <td>
-                <span class="id-badge">{{ user.tipoIdentificacion }}</span>
+                <span class="chip">{{ user.tipoIdentificacion }}</span>
                 {{ user.numeroIdentificacion }}
               </td>
-              <td>{{ user.email }}</td>
-              <td>{{ user.telefonoMovil || 'N/A' }}</td>
-              <td>{{ user.ciudadResidencia || 'N/A' }}</td>
               <td>
-                <span :class="getStatusClass(user)">
-                  {{ getStatusText(user) }}
-                </span>
+                <p class="primary">{{ user.telefonoMovil || 'N/A' }}</p>
+                <p class="secondary">
+                  Email {{ user.emailConfirmado ? 'confirmado' : 'pendiente' }}
+                </p>
               </td>
-              <td class="actions-column">
-                <button 
+              <td>
+                <p class="primary">{{ user.ciudadResidencia || 'N/A' }}</p>
+                <p class="secondary">{{ user.departamentoResidencia || '' }}</p>
+              </td>
+              <td>
+                <span :class="getStatusClass(user)">{{ getStatusText(user) }}</span>
+              </td>
+              <td class="actions">
+                <button
                   v-if="!user.emailConfirmado"
                   @click="confirmEmail(user.id)"
-                  class="btn-action btn-email"
-                  title="Confirmar Email"
+                  class="btn-action email"
+                  title="Confirmar email"
                 >
-                  📧 Email
+                  Confirmar email
                 </button>
-                <button 
+                <button
                   v-if="!user.telefonoMovilConfirmado && user.telefonoMovil"
                   @click="confirmPhone(user.id)"
-                  class="btn-action btn-phone"
-                  title="Confirmar Teléfono"
+                  class="btn-action phone"
+                  title="Confirmar teléfono"
                 >
-                  📱 Teléfono
+                  Confirmar teléfono
                 </button>
-                <span v-if="user.emailConfirmado && user.telefonoMovilConfirmado" class="authenticated">
-                  ✓ Autenticado
-                </span>
-                <span v-else-if="user.emailConfirmado && !user.telefonoMovilConfirmado" class="partial">
-                  ✓ Email OK
-                </span>
-                <span v-else-if="!user.emailConfirmado && user.telefonoMovilConfirmado" class="partial">
-                  ✓ Tel OK
-                </span>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <!-- Pagination -->
-      <div class="pagination">
-        <button 
-          @click="previousPage" 
-          :disabled="currentPage === 1"
-          class="btn-page"
-        >
+      <footer class="pagination">
+        <button @click="previousPage" :disabled="currentPage === 1" class="btn btn-ghost">
           ← Anterior
         </button>
-        
         <div class="page-info">
           Página {{ currentPage }} de {{ totalPages }}
-          <span class="page-range">
-            ({{ rangeStart }} - {{ rangeEnd }} de {{ users.length }})
-          </span>
+          <span class="range">({{ rangeStart }} - {{ rangeEnd }} de {{ users.length }})</span>
         </div>
-        
-        <button 
-          @click="nextPage" 
+        <button
+          @click="nextPage"
           :disabled="currentPage === totalPages"
-          class="btn-page"
+          class="btn btn-ghost"
         >
           Siguiente →
         </button>
-      </div>
-    </div>
+      </footer>
+    </section>
 
-    <!-- Success Message -->
-    <div v-if="successMessage" class="success-message">
-      {{ successMessage }}
-    </div>
+    <transition name="toast">
+      <div v-if="successMessage" class="toast">
+        {{ successMessage }}
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -145,10 +160,8 @@ import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
 
-
 const router = useRouter();
-const { logout: auth0Logout } = useAuth0();
-const { getAccessTokenSilently } = useAuth0();
+const { logout: auth0Logout, getAccessTokenSilently } = useAuth0();
 
 const users = ref([]);
 const isLoading = ref(false);
@@ -157,9 +170,7 @@ const successMessage = ref(null);
 const currentPage = ref(1);
 const itemsPerPage = 10;
 
-// Computed properties
-const totalPages = computed(() => Math.ceil(users.value.length / itemsPerPage));
-
+const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / itemsPerPage)));
 const paginatedUsers = computed(() => {
   const start = (currentPage.value - 1) * itemsPerPage;
   const end = start + itemsPerPage;
@@ -176,12 +187,29 @@ const rangeEnd = computed(() => {
   return end > users.value.length ? users.value.length : end;
 });
 
-// Methods
+const totalUsers = computed(() => users.value.length);
+const verifiedUsers = computed(() =>
+  users.value.filter(user => user.emailConfirmado && user.telefonoMovilConfirmado).length
+);
+const partialUsers = computed(() =>
+  users.value.filter(user =>
+    (user.emailConfirmado && !user.telefonoMovilConfirmado) ||
+    (!user.emailConfirmado && user.telefonoMovilConfirmado)
+  ).length
+);
+const pendingUsers = computed(() =>
+  users.value.filter(user => !user.emailConfirmado && !user.telefonoMovilConfirmado).length
+);
+const verifiedRate = computed(() => {
+  if (totalUsers.value === 0) return 0;
+  return Math.round((verifiedUsers.value / totalUsers.value) * 100);
+});
+
 const logout = () => {
-  auth0Logout({ 
-    logoutParams: { 
+  auth0Logout({
+    logoutParams: {
       returnTo: window.location.origin
-    } 
+    }
   });
 };
 
@@ -189,20 +217,30 @@ const goToRegister = () => {
   router.push({ name: 'register' });
 };
 
+const formatFullName = (user) => {
+  return [
+    user.primerNombre,
+    user.segundoNombre,
+    user.primerApellido,
+    user.segundoApellido
+  ].filter(Boolean).join(' ');
+};
+
 const fetchData = async () => {
   isLoading.value = true;
   apiError.value = null;
   successMessage.value = null;
-  
+
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
     users.value = response.data;
-    console.log('✅ Usuarios cargados:', response.data);
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = totalPages.value;
+    }
   } catch (error) {
-    apiError.value = error.response 
-      ? `Error ${error.response.status}` 
+    apiError.value = error.response
+      ? `Error ${error.response.status}`
       : 'Error de conexión';
-    console.error('❌ Error al obtener usuarios:', error);
   } finally {
     isLoading.value = false;
   }
@@ -211,32 +249,28 @@ const fetchData = async () => {
 const confirmEmail = async (userId) => {
   try {
     await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-email`);
-    successMessage.value = '✅ Email confirmado exitosamente';
-    
-    // Actualizar el usuario en la lista local
+    successMessage.value = 'Email confirmado exitosamente';
+
     const user = users.value.find(u => u.id === userId);
     if (user) user.emailConfirmado = true;
-    
+
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
     apiError.value = 'Error al confirmar email';
-    console.error('❌ Error:', error);
   }
 };
 
 const confirmPhone = async (userId) => {
   try {
     await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-phone`);
-    successMessage.value = '✅ Teléfono confirmado exitosamente';
-    
-    // Actualizar el usuario en la lista local
+    successMessage.value = 'Teléfono confirmado exitosamente';
+
     const user = users.value.find(u => u.id === userId);
     if (user) user.telefonoMovilConfirmado = true;
-    
+
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
     apiError.value = 'Error al confirmar teléfono';
-    console.error('❌ Error:', error);
   }
 };
 
@@ -245,7 +279,7 @@ const getStatusText = (user) => {
     return '✓ Autenticado';
   }
   if (user.emailConfirmado || user.telefonoMovilConfirmado) {
-    return '⚠ Parcial';
+    return '⚠ Verificación parcial';
   }
   return '✗ Pendiente';
 };
@@ -274,354 +308,473 @@ const previousPage = () => {
 
 onMounted(async () => {
   try {
-    const token = await getAccessTokenSilently({
+    await getAccessTokenSilently({
       authorizationParams: {
         audience: import.meta.env.VITE_AUTH0_AUDIENCE
       }
     });
-    
-    console.log('🔐 Access Token Auth0:', token);
 
-    await fetchData(); // ← ahora se ejecuta después del token
-  } catch (e) {
-    console.error('❌ Error obteniendo token en dashboard:', e);
+    await fetchData();
+  } catch (error) {
+    console.error('Error obteniendo token en dashboard:', error);
   }
 });
-
 </script>
 
 <style scoped>
-.dashboard-container {
-  max-width: 1400px;
+.dashboard-shell {
+  position: relative;
+  padding: 3rem 1.5rem 4rem;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 20px;
-}
-
-.header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 30px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #e0e0e0;
+  flex-direction: column;
+  gap: 2rem;
 }
 
-.header h1 {
-  margin: 0 0 5px 0;
-  color: #81c784;
-  font-size: 28px;
+.background-visuals {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 55%),
+    radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.06), transparent 50%);
 }
 
-.welcome-text {
-  color: #81c784;
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(0.5px);
+  opacity: 0.7;
+}
+
+.orb-one {
+  width: 420px;
+  height: 420px;
+  top: -160px;
+  right: -120px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.18), transparent 70%);
+}
+
+.orb-two {
+  width: 340px;
+  height: 340px;
+  bottom: -120px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 70%);
+  animation: breathe 16s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+.dashboard-hero {
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 24px;
+  padding: 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  box-shadow: 0 30px 80px -40px rgba(15, 42, 90, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.eyebrow {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: #7c3aed;
+  font-weight: 700;
   margin: 0;
 }
 
-.header-actions {
+.dashboard-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3.5vw, 2.6rem);
+  color: #15294a;
+  line-height: 1.2;
+}
+
+.dashboard-hero p {
+  margin: 0;
+  color: #4f5b72;
+  line-height: 1.6;
+}
+
+.hero-actions {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1.4rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
-  padding: 10px 20px;
-  background-color: #4CAF50;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  transition: background-color 0.3s;
+  background: linear-gradient(120deg, #7c3aed, #4f46e5);
+  color: #fff;
+  box-shadow: 0 16px 36px -22px rgba(76, 29, 149, 0.65);
 }
 
 .btn-primary:hover {
-  background-color: #45a049;
+  box-shadow: 0 20px 45px -20px rgba(79, 70, 229, 0.6);
 }
 
-.btn-logout {
-  padding: 10px 20px;
-  background-color: #f44336;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
+.btn-ghost {
+  background: rgba(79, 70, 229, 0.08);
+  color: #4f46e5;
 }
 
-.btn-logout:hover {
-  background-color: #da190b;
+.btn-ghost:hover {
+  background: rgba(79, 70, 229, 0.12);
 }
 
-.loading {
+.hero-summary {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.summary-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  padding: 1.5rem;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 15px 40px -30px rgba(15, 42, 90, 0.4);
+}
+
+.summary-label {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #6b7b95;
+  letter-spacing: 0.12em;
+}
+
+.summary-value {
+  margin: 0.35rem 0 0;
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #15294a;
+}
+
+.summary-value.positive {
+  color: #059669;
+}
+
+.summary-value.warning {
+  color: #d97706;
+}
+
+.summary-foot {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7b95;
+}
+
+.state-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 20px 60px -40px rgba(15, 42, 90, 0.4);
+  backdrop-filter: blur(8px);
   text-align: center;
-  padding: 40px;
-  color: #666;
-  font-size: 18px;
+  flex-direction: column;
 }
 
-.error-message {
-  background-color: #ffebee;
-  border: 1px solid #ef5350;
-  color: #c62828;
-  padding: 20px;
-  border-radius: 4px;
-  text-align: center;
+.state-card.error {
+  color: #b91c1c;
 }
 
-.btn-retry {
-  margin-top: 10px;
-  padding: 8px 16px;
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+.state-card.empty h2 {
+  margin: 0;
+  color: #15294a;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+.state-card.empty p {
+  margin: 0 0 1rem;
+  color: #4f5b72;
 }
 
-.empty-state p {
-  font-size: 18px;
-  color: #666;
-  margin-bottom: 20px;
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 3px solid rgba(79, 70, 229, 0.2);
+  border-top-color: #4f46e5;
+  animation: spin 0.9s linear infinite;
 }
 
-.users-section {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.data-section {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 26px;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 24px 60px -38px rgba(15, 42, 90, 0.35);
   overflow: hidden;
 }
 
-.table-header {
+.data-header {
+  padding: 2rem 2.2rem 1.5rem;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.table-header h3 {
+.data-header h2 {
   margin: 0;
-  color: #333;
+  color: #15294a;
+  font-size: 1.5rem;
 }
 
-.btn-refresh {
-  padding: 8px 16px;
-  background-color: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
+.data-header p {
+  margin: 0.35rem 0 0;
+  color: #6b7b95;
 }
 
-.btn-refresh:hover {
-  background-color: #0b7dda;
-}
-
-.table-container {
+.table-wrapper {
   overflow-x: auto;
 }
 
-.users-table {
+.table-wrapper table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 960px;
 }
 
-.users-table thead {
-  background-color: #f8f9fa;
-}
-
-.users-table th {
-  padding: 12px;
+th {
   text-align: left;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7c8ba7;
+  padding: 0 2.2rem 1rem;
+}
+
+td {
+  padding: 1.25rem 2.2rem;
+  border-top: 1px solid rgba(21, 41, 74, 0.06);
+  color: #2f3e57;
+  vertical-align: top;
+}
+
+.name-cell .primary {
+  margin: 0;
   font-weight: 600;
-  color: #495057;
-  border-bottom: 2px solid #dee2e6;
-  font-size: 14px;
+  color: #15294a;
 }
 
-.users-table td {
-  padding: 12px;
-  border-bottom: 1px solid #dee2e6;
-  font-size: 14px;
-}
-
-.users-table tbody tr:hover {
-  background-color: #f8f9fa;
-}
-
-.name-column {
+.primary {
+  margin: 0;
   font-weight: 500;
-  color: #333;
 }
 
-.id-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  background-color: #e3f2fd;
-  color: #1976d2;
-  border-radius: 3px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-right: 5px;
+.secondary {
+  margin: 0.2rem 0 0;
+  color: #6b7b95;
+  font-size: 0.9rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  margin-right: 0.45rem;
 }
 
 .status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
   font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .status-badge.authenticated {
-  background-color: #c8e6c9;
-  color: #2e7d32;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
 }
 
 .status-badge.partial {
-  background-color: #fff9c4;
-  color: #f57f17;
+  background: rgba(234, 179, 8, 0.14);
+  color: #92400e;
 }
 
 .status-badge.pending {
-  background-color: #ffcdd2;
-  color: #c62828;
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
 }
 
-.actions-column {
-  white-space: nowrap;
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .btn-action {
-  padding: 6px 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.85rem;
   cursor: pointer;
-  font-size: 12px;
-  margin-right: 5px;
-  transition: opacity 0.3s;
+  transition: background 0.2s ease, transform 0.2s ease;
+  text-align: left;
 }
 
 .btn-action:hover {
-  opacity: 0.8;
+  transform: translateY(-1px);
 }
 
-.btn-email {
-  background-color: #2196F3;
-  color: white;
+.btn-action.email {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
 }
 
-.btn-phone {
-  background-color: #FF9800;
-  color: white;
+.btn-action.email:hover {
+  background: rgba(59, 130, 246, 0.18);
 }
 
-.authenticated, .partial {
-  font-size: 12px;
-  font-weight: 600;
-  color: #4CAF50;
+.btn-action.phone {
+  background: rgba(244, 114, 182, 0.12);
+  color: #be185d;
+}
+
+.btn-action.phone:hover {
+  background: rgba(244, 114, 182, 0.18);
 }
 
 .pagination {
+  padding: 1.5rem 2.2rem 2rem;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-top: 1px solid #dee2e6;
-}
-
-.btn-page {
-  padding: 8px 16px;
-  background-color: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.btn-page:hover:not(:disabled) {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
-}
-
-.btn-page:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: rgba(248, 250, 252, 0.6);
 }
 
 .page-info {
-  font-size: 14px;
-  color: #495057;
+  font-size: 0.95rem;
+  color: #4f5b72;
 }
 
-.page-range {
-  color: #6c757d;
-  font-size: 13px;
+.range {
+  color: #7c8ba7;
+  font-size: 0.85rem;
+  margin-left: 0.4rem;
 }
 
-.success-message {
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.toast {
   position: fixed;
   top: 20px;
   right: 20px;
-  background-color: #c8e6c9;
-  color: #2e7d32;
-  padding: 15px 20px;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-  z-index: 1000;
-  animation: slideIn 0.3s ease-out;
+  background: rgba(16, 185, 129, 0.95);
+  color: #ecfdf5;
+  padding: 1rem 1.4rem;
+  border-radius: 16px;
+  box-shadow: 0 18px 38px -22px rgba(16, 185, 129, 0.55);
+  z-index: 20;
+  font-weight: 600;
 }
 
-@keyframes slideIn {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
+@media (max-width: 1024px) {
+  .dashboard-hero {
+    grid-template-columns: 1fr;
   }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
 
-@media (max-width: 768px) {
-  .header {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .table-container {
-    font-size: 12px;
-  }
-  
-  .users-table th,
-  .users-table td {
-    padding: 8px;
+  .hero-summary {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    display: grid;
   }
 }
 
-.text-green {
-  color: #00b37e; /* verde elegante */
+@media (max-width: 720px) {
+  .dashboard-shell {
+    padding: 2.5rem 1.2rem 3rem;
+  }
+
+  .data-header {
+    padding: 1.6rem 1.5rem 1.2rem;
+  }
+
+  th, td {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .pagination {
+    padding: 1.4rem 1.5rem 1.6rem;
+  }
 }
 
-.text-green-light {
-  color: #00d68f; /* un poco más claro para el subtítulo */
-}
+@media (max-width: 600px) {
+  .table-wrapper table {
+    min-width: 720px;
+  }
 
-.welcome-text {
-  font-size: 1rem;
-  margin-top: 0.3rem;
+  .dashboard-hero {
+    padding: 2rem;
+  }
 }
-
 </style>
