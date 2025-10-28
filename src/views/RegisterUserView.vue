@@ -227,7 +227,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-// Asegúrate de que esta ruta sea correcta para tu proyecto
 import axiosInstance from '../http/axiosInstance'; 
 
 const router = useRouter();
@@ -240,9 +239,9 @@ const formData = ref({
   secondName: '',
   firstSurname: '',
   secondSurname: '',
-  country: '',    // NUEVO: UUID del país
-  department: '', // NUEVO: UUID del departamento
-  homeCity: '',   // UUID de la ciudad
+  country: '',  
+  department: '',
+  homeCity: '',   
   email: '', 
   mobileNumber: ''
 });
@@ -264,7 +263,7 @@ const goBack = () => {
   router.push({ name: 'dashboard' });
 };
 
-// Cargar tipos de identificación
+// Cargar tipos de identificaciOn
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/tipos-identificacion');
@@ -294,7 +293,7 @@ const loadCountries = async () => {
   }
 };
 
-// Cargar departamentos (depende del país)
+// Cargar departamentos
 const loadDepartments = async (countryId) => {
   // Limpiar selecciones dependientes
   departamentos.value = [];
@@ -313,7 +312,7 @@ const loadDepartments = async (countryId) => {
   } catch (error) {
     console.error('❌ Error al cargar departamentos:', error);
     departamentos.value = [];
-    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.';
+    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.'; 
   }
 };
 
