@@ -74,53 +74,67 @@
         <table>
           <thead>
             <tr>
-              <th>Nombre completo</th>
-              <th>Identificación</th>
-              <th>Contacto</th>
-              <th>Ubicación</th>
+              <th>Tipo de identificación</th>
+              <th>Número</th>
+              <th>Nombres</th>
+              <th>Apellidos</th>
+              <th>Ciudad</th>
+              <th>Correo</th>
+              <th>Teléfono</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in paginatedUsers" :key="user.id">
+              <td>
+                <span class="chip">{{ user.idTypeName }}</span>
+              </td>
+              <td>
+                {{ user.idNumber || 'N/A' }}
+              </td>
               <td class="name-cell">
-                <p class="primary">{{ formatFullName(user) }}</p>
-                <p class="secondary">{{ user.email }}</p>
+                <p class="primary">{{ formatNames(user) }}</p>
               </td>
               <td>
-                <span class="chip">{{ user.tipoIdentificacion }}</span>
-                {{ user.numeroIdentificacion }}
+                <p class="primary">{{ formatSurnames(user) }}</p>
               </td>
               <td>
-                <p class="primary">{{ user.telefonoMovil || 'N/A' }}</p>
+                <p class="primary">{{ user.cityName }}</p>
+                <p class="secondary" v-if="user.departmentName">{{ user.departmentName }}</p>
+              </td>
+              <td>
+                <p class="primary">{{ user.email }}</p>
                 <p class="secondary">
-                  Email {{ user.emailConfirmado ? 'confirmado' : 'pendiente' }}
+                  {{ user.emailConfirmed ? 'Verificado' : 'Pendiente' }}
                 </p>
               </td>
               <td>
-                <p class="primary">{{ user.ciudadResidencia || 'N/A' }}</p>
-                <p class="secondary">{{ user.departamentoResidencia || '' }}</p>
+                <p class="primary">{{ user.mobileNumber || 'N/A' }}</p>
+                <p class="secondary">
+                  {{ user.mobileNumber ? (user.mobileNumberConfirmed ? 'Verificado' : 'Pendiente') : 'Sin teléfono' }}
+                </p>
               </td>
               <td>
                 <span :class="getStatusClass(user)">{{ getStatusText(user) }}</span>
               </td>
               <td class="actions">
                 <button
-                  v-if="!user.emailConfirmado"
                   @click="confirmEmail(user.id)"
                   class="btn-action email"
                   title="Confirmar email"
+                  :disabled="user.emailConfirmed"
                 >
-                  Confirmar email
+                  {{ user.emailConfirmed ? 'Email verificado' : 'Confirmar email' }}
                 </button>
                 <button
-                  v-if="!user.telefonoMovilConfirmado && user.telefonoMovil"
                   @click="confirmPhone(user.id)"
                   class="btn-action phone"
                   title="Confirmar teléfono"
+                  :disabled="!user.mobileNumber || user.mobileNumberConfirmed"
                 >
-                  Confirmar teléfono
+                  <template v-if="!user.mobileNumber">Sin teléfono</template>
+                  <template v-else>{{ user.mobileNumberConfirmed ? 'Teléfono verificado' : 'Confirmar teléfono' }}</template>
                 </button>
               </td>
             </tr>
@@ -189,16 +203,16 @@ const rangeEnd = computed(() => {
 
 const totalUsers = computed(() => users.value.length);
 const verifiedUsers = computed(() =>
-  users.value.filter(user => user.emailConfirmado && user.telefonoMovilConfirmado).length
+  users.value.filter(user => user.emailConfirmed && user.mobileNumberConfirmed).length
 );
 const partialUsers = computed(() =>
   users.value.filter(user =>
-    (user.emailConfirmado && !user.telefonoMovilConfirmado) ||
-    (!user.emailConfirmado && user.telefonoMovilConfirmado)
+    (user.emailConfirmed && !user.mobileNumberConfirmed) ||
+    (!user.emailConfirmed && user.mobileNumberConfirmed)
   ).length
 );
 const pendingUsers = computed(() =>
-  users.value.filter(user => !user.emailConfirmado && !user.telefonoMovilConfirmado).length
+  users.value.filter(user => !user.emailConfirmed && !user.mobileNumberConfirmed).length
 );
 const verifiedRate = computed(() => {
   if (totalUsers.value === 0) return 0;
@@ -217,13 +231,44 @@ const goToRegister = () => {
   router.push({ name: 'register' });
 };
 
-const formatFullName = (user) => {
-  return [
-    user.primerNombre,
-    user.segundoNombre,
-    user.primerApellido,
-    user.segundoApellido
-  ].filter(Boolean).join(' ');
+const formatNames = (user) => {
+  return [user.firstName, user.secondName].filter(Boolean).join(' ') || 'N/A';
+};
+
+const formatSurnames = (user) => {
+  return [user.firstSurname, user.secondSurname].filter(Boolean).join(' ') || 'N/A';
+};
+
+const normalizeUserData = (rawUser) => {
+  const emailConfirmed = rawUser.emailConfirmed ?? rawUser.emailConfirmado ?? rawUser.email_confirmation ?? false;
+  const mobileNumberConfirmed = rawUser.mobileNumberConfirmed ?? rawUser.telefonoMovilConfirmado ?? rawUser.mobile_number_confirmed ?? false;
+
+  return {
+    id: rawUser.id,
+    idTypeId: rawUser.idType ?? rawUser.tipoIdentificacionId ?? rawUser.tipoIdentificacion ?? null,
+    idTypeName:
+      rawUser.idTypeName ??
+      rawUser.tipoIdentificacionNombre ??
+      rawUser.tipoDocumento ??
+      rawUser.tipoIdentificacion ??
+      'N/A',
+    idNumber: rawUser.idNumber ?? rawUser.numeroIdentificacion ?? null,
+    firstName: rawUser.firstName ?? rawUser.primerNombre ?? null,
+    secondName: rawUser.secondName ?? rawUser.segundoNombre ?? null,
+    firstSurname: rawUser.firstSurname ?? rawUser.primerApellido ?? null,
+    secondSurname: rawUser.secondSurname ?? rawUser.segundoApellido ?? null,
+    cityName:
+      rawUser.homeCityName ??
+      rawUser.ciudadResidenciaNombre ??
+      rawUser.ciudadResidencia ??
+      rawUser.cityName ??
+      'N/A',
+    departmentName: rawUser.homeDepartmentName ?? rawUser.departamentoResidencia ?? null,
+    email: rawUser.email ?? '—',
+    mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
+    emailConfirmed,
+    mobileNumberConfirmed
+  };
 };
 
 const fetchData = async () => {
@@ -233,7 +278,8 @@ const fetchData = async () => {
 
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
-    users.value = response.data;
+    const rawUsers = Array.isArray(response.data) ? response.data : [];
+    users.value = rawUsers.map(normalizeUserData);
     if (currentPage.value > totalPages.value) {
       currentPage.value = totalPages.value;
     }
@@ -252,7 +298,7 @@ const confirmEmail = async (userId) => {
     successMessage.value = 'Email confirmado exitosamente';
 
     const user = users.value.find(u => u.id === userId);
-    if (user) user.emailConfirmado = true;
+    if (user) user.emailConfirmed = true;
 
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
@@ -266,7 +312,7 @@ const confirmPhone = async (userId) => {
     successMessage.value = 'Teléfono confirmado exitosamente';
 
     const user = users.value.find(u => u.id === userId);
-    if (user) user.telefonoMovilConfirmado = true;
+    if (user) user.mobileNumberConfirmed = true;
 
     setTimeout(() => successMessage.value = null, 3000);
   } catch (error) {
@@ -275,20 +321,20 @@ const confirmPhone = async (userId) => {
 };
 
 const getStatusText = (user) => {
-  if (user.emailConfirmado && user.telefonoMovilConfirmado) {
+  if (user.emailConfirmed && user.mobileNumberConfirmed) {
     return '✓ Autenticado';
   }
-  if (user.emailConfirmado || user.telefonoMovilConfirmado) {
+  if (user.emailConfirmed || user.mobileNumberConfirmed) {
     return '⚠ Verificación parcial';
   }
   return '✗ Pendiente';
 };
 
 const getStatusClass = (user) => {
-  if (user.emailConfirmado && user.telefonoMovilConfirmado) {
+  if (user.emailConfirmed && user.mobileNumberConfirmed) {
     return 'status-badge authenticated';
   }
-  if (user.emailConfirmado || user.telefonoMovilConfirmado) {
+  if (user.emailConfirmed || user.mobileNumberConfirmed) {
     return 'status-badge partial';
   }
   return 'status-badge pending';
@@ -669,6 +715,17 @@ td {
 
 .btn-action:hover {
   transform: translateY(-1px);
+}
+
+.btn-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.btn-action:disabled:hover {
+  background: inherit;
+  transform: none;
 }
 
 .btn-action.email {
