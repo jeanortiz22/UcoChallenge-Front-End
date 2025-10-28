@@ -312,7 +312,7 @@ const loadDepartments = async (countryId) => {
   } catch (error) {
     console.error('❌ Error al cargar departamentos:', error);
     departamentos.value = [];
-    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.'; 
+    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.';
   }
 };
 
