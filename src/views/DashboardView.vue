@@ -377,30 +377,17 @@ const pickValueForDepartment = (rawCity) => {
   };
 };
 
-const hasMeaningfulText = (text, identifier) => {
-  if (text === undefined || text === null) return false;
-  const normalized = String(text).trim();
-  if (!normalized || normalized === 'N/A' || normalized === '—') return false;
-  if (identifier) {
-    const normalizedId = String(identifier).trim();
-    if (normalizedId && normalized.toLowerCase() === normalizedId.toLowerCase()) {
-      return false;
-    }
-  }
-  return true;
-};
-
 const populateCatalogData = async (userList) => {
   const missingIdTypeIds = [...new Set(
     userList
-      .filter((user) => !hasMeaningfulText(user.idTypeName, user.idTypeId) && user.idTypeId)
+      .filter((user) => (!user.idTypeName || user.idTypeName === 'N/A') && user.idTypeId)
       .map((user) => user.idTypeId)
   )];
 
   if (missingIdTypeIds.length) {
     await ensureIdentificationTypesCatalog();
     userList.forEach((user) => {
-      if (!hasMeaningfulText(user.idTypeName, user.idTypeId) && user.idTypeId) {
+      if ((!user.idTypeName || user.idTypeName === 'N/A') && user.idTypeId) {
         const catalogEntry = idTypeCatalog.get(user.idTypeId);
         if (catalogEntry?.label) {
           user.idTypeName = catalogEntry.label;
@@ -411,14 +398,14 @@ const populateCatalogData = async (userList) => {
 
   const missingCityIds = [...new Set(
     userList
-      .filter((user) => !hasMeaningfulText(user.cityName, user.cityId) && user.cityId)
+      .filter((user) => (!user.cityName || user.cityName === 'N/A') && user.cityId)
       .map((user) => user.cityId)
   )];
 
   if (missingCityIds.length) {
     await ensureCitiesCatalog(missingCityIds, userList);
     userList.forEach((user) => {
-      if (!hasMeaningfulText(user.cityName, user.cityId) && user.cityId) {
+      if ((!user.cityName || user.cityName === 'N/A') && user.cityId) {
         const cityEntry = cityCatalog.get(user.cityId);
         if (cityEntry?.label) {
           user.cityName = cityEntry.label;
@@ -426,7 +413,7 @@ const populateCatalogData = async (userList) => {
         const departmentEntry = cityEntry?.department ?? pickValueForDepartment(cityEntry?.raw);
         if (departmentEntry) {
           user.departmentId = user.departmentId || departmentEntry.id;
-          if (!hasMeaningfulText(user.departmentName, user.departmentId)) {
+          if (!user.departmentName || user.departmentName === 'N/A') {
             user.departmentName = departmentEntry.label;
           }
         }
@@ -435,13 +422,13 @@ const populateCatalogData = async (userList) => {
   }
 
   userList.forEach((user) => {
-    if (!hasMeaningfulText(user.idTypeName, user.idTypeId)) {
+    if (!user.idTypeName || user.idTypeName === 'N/A') {
       user.idTypeName = user.idTypeId || '—';
     }
-    if (!hasMeaningfulText(user.cityName, user.cityId)) {
+    if (!user.cityName || user.cityName === 'N/A') {
       user.cityName = user.cityId || '—';
     }
-    if (!hasMeaningfulText(user.departmentName, user.departmentId)) {
+    if (!user.departmentName || user.departmentName === 'N/A') {
       user.departmentName = user.departmentId || null;
     }
   });
