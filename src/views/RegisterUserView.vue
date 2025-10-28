@@ -101,7 +101,7 @@
                   :key="tipo.id"
                   :value="tipo.id"
                 >
-                  {{ tipo.nombre }}
+                  {{ tipo.label }}
                 </option>
               </select>
             </div>
@@ -132,7 +132,7 @@
                   :key="pais.id"
                   :value="pais.id"
                 >
-                  {{ pais.nombre }}
+                  {{ pais.label }}
                 </option>
               </select>
             </div>
@@ -152,7 +152,7 @@
                   :key="dep.id"
                   :value="dep.id"
                 >
-                  {{ dep.nombre }}
+                  {{ dep.label }}
                 </option>
               </select>
             </div>
@@ -171,7 +171,7 @@
                   :key="ciudad.id"
                   :value="ciudad.id"
                 >
-                  {{ ciudad.nombre }}
+                  {{ ciudad.label }}
                 </option>
               </select>
             </div>
@@ -252,7 +252,69 @@ const paises = ref([]);
 const departamentos = ref([]);
 const ciudades = ref([]);
 
-const ensureArray = (data) => (Array.isArray(data) ? data : []);
+const unwrapCollection = (payload) => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (payload && typeof payload === 'object') {
+    const candidateKeys = ['data', 'content', 'results', 'items', 'value', 'values'];
+    for (const key of candidateKeys) {
+      if (Array.isArray(payload[key])) {
+        return payload[key];
+      }
+    }
+  }
+
+  return [];
+};
+
+const toDisplayString = (value) => {
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+};
+
+const pickFirstAvailable = (item, keys = []) => {
+  for (const key of keys) {
+    const label = toDisplayString(item?.[key]);
+    if (label) {
+      return label;
+    }
+  }
+  return '';
+};
+
+const pickIdValue = (item, keys = []) => {
+  const defaultKeys = ['id', 'uuid', 'codigo', 'code', 'value', 'valor'];
+  for (const key of [...keys, ...defaultKeys]) {
+    const raw = item?.[key];
+    if (raw !== undefined && raw !== null && raw !== '') {
+      return String(raw);
+    }
+  }
+  return undefined;
+};
+
+const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
+  const collection = unwrapCollection(payload);
+  return collection
+    .map((entry) => {
+      const id = pickIdValue(entry, idKeys);
+      if (!id) return null;
+
+      const label =
+        pickFirstAvailable(entry, [...labelKeys, 'nombre', 'name', 'descripcion', 'description', 'detalle', 'label']) || id;
+
+      return {
+        id,
+        label,
+        raw: entry
+      };
+    })
+    .filter(Boolean);
+};
 
 // Estados
 const isSubmitting = ref(false);
@@ -267,9 +329,16 @@ const goBack = () => {
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/tipos-documento');
-    tiposIdentificacion.value = ensureArray(response.data);
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'descripcionCorta', 'abreviatura', 'tipoDocumento'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    tiposIdentificacion.value = catalog;
     if (errorMessage.value.startsWith('No se pudieron cargar los tipos de identificación')) {
       errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de tipos de identificación vacío o con formato desconocido:', response.data);
     }
   } catch (error) {
     console.error('❌ Error al cargar tipos de identificación:', error);
@@ -282,9 +351,16 @@ const loadIdentificationTypes = async () => {
 const loadCountries = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/paises');
-    paises.value = ensureArray(response.data);
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'pais'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    paises.value = catalog;
     if (errorMessage.value.startsWith('No se pudieron cargar los países')) {
       errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de países vacío o con formato desconocido:', response.data);
     }
   } catch (error) {
     console.error('❌ Error al cargar países:', error);
@@ -305,9 +381,16 @@ const loadDepartments = async (countryId) => {
 
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/departamentos', { params: { paisId: countryId }});
-    departamentos.value = ensureArray(response.data);
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'departamento'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    departamentos.value = catalog;
     if (errorMessage.value.startsWith('No se pudieron cargar los departamentos')) {
       errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de departamentos vacío o con formato desconocido:', response.data);
     }
   } catch (error) {
     console.error('❌ Error al cargar departamentos:', error);
@@ -326,9 +409,16 @@ const loadCities = async (departmentId) => {
 
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/ciudades', { params: { departamentoId: departmentId }});
-    ciudades.value = ensureArray(response.data);
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'ciudad'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    ciudades.value = catalog;
     if (errorMessage.value.startsWith('No se pudieron cargar las ciudades')) {
       errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de ciudades vacío o con formato desconocido:', response.data);
     }
   } catch (error) {
     console.error('❌ Error al cargar ciudades:', error);
@@ -343,7 +433,7 @@ const handleSubmit = async () => {
   errorMessage.value = '';
 
   try {
-    // El payload final solo incluye homeCity, que es el UUID de la ciudad seleccionada.
+    // Se envían los identificadores seleccionados para compatibilidad con las versiones vieja y nueva del API.
     const payload = {
       idType: formData.value.idType,
       idNumber: formData.value.idNumber,
@@ -351,7 +441,13 @@ const handleSubmit = async () => {
       secondName: formData.value.secondName || null,
       firstSurname: formData.value.firstSurname,
       secondSurname: formData.value.secondSurname || null,
-      homeCity: formData.value.homeCity, // UUID de la ciudad
+      country: formData.value.country || null, // compatibilidad legado
+      countryId: formData.value.country || null,
+      department: formData.value.department || null, // compatibilidad legado
+      departmentId: formData.value.department || null,
+      homeCity: formData.value.homeCity, // UUID de la ciudad (legado)
+      homeCityId: formData.value.homeCity,
+      cityId: formData.value.homeCity,
       email: formData.value.email,
       mobileNumber: formData.value.mobileNumber || null
     };
