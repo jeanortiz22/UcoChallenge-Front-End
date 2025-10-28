@@ -1,189 +1,226 @@
 <template>
-  <div class="register-container">
-    <div class="header">
-      <h2>Registrar Nuevo Usuario</h2>
-      <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
-    </div>
+  <div class="register-page">
+    <div class="ambient-light ambient-light--primary"></div>
+    <div class="ambient-light ambient-light--secondary"></div>
 
-    <form @submit.prevent="handleSubmit" class="register-form">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="firstName">Primer Nombre *</label>
-          <input 
-            id="firstName"
-            v-model="formData.firstName" 
-            type="text" 
-            required
-            placeholder="Juan"
-          />
+    <section class="register-layout">
+      <aside class="register-hero">
+        <h1>Impulsa el talento con una experiencia memorable</h1>
+        <p>
+          Gestiona el registro de nuevos usuarios con un flujo claro, envolvente y
+          pensado para crear confianza desde el primer clic.
+        </p>
+
+        <ul class="hero-highlights">
+          <li>
+            <span class="icon">⚡</span>
+            Validaciones en tiempo real sobre la información clave.
+          </li>
+          <li>
+            <span class="icon">🌍</span>
+            Catálogos dinámicos conectados con la base de datos oficial.
+          </li>
+          <li>
+            <span class="icon">🛡️</span>
+            Seguridad reforzada con autenticación y trazabilidad.
+          </li>
+        </ul>
+      </aside>
+
+      <div class="register-container">
+        <div class="header">
+          <div>
+            <p class="badge">Nuevo ingreso</p>
+            <h2>Registrar Nuevo Usuario</h2>
+            <p class="subheading">
+              Completa los datos del participante para activar su cuenta en la
+              plataforma.
+            </p>
+          </div>
+          <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
         </div>
 
-        <div class="form-group">
-          <label for="secondName">Segundo Nombre</label>
-          <input 
-            id="secondName"
-            v-model="formData.secondName" 
-            type="text"
-            placeholder="Carlos"
-          />
-        </div>
+        <form @submit.prevent="handleSubmit" class="register-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstName">Primer Nombre *</label>
+              <input
+                id="firstName"
+                v-model="formData.firstName"
+                type="text"
+                required
+                placeholder="Juan"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="secondName">Segundo Nombre</label>
+              <input
+                id="secondName"
+                v-model="formData.secondName"
+                type="text"
+                placeholder="Carlos"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstSurname">Primer Apellido *</label>
+              <input
+                id="firstSurname"
+                v-model="formData.firstSurname"
+                type="text"
+                required
+                placeholder="Pérez"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="secondSurname">Segundo Apellido</label>
+              <input
+                id="secondSurname"
+                v-model="formData.secondSurname"
+                type="text"
+                placeholder="García"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="idType">Tipo de Identificación *</label>
+              <select
+                id="idType"
+                v-model="formData.idType"
+                required
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="tipo in tiposIdentificacion"
+                  :key="tipo.id"
+                  :value="tipo.id"
+                >
+                  {{ tipo.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="idNumber">Número de Identificación *</label>
+              <input
+                id="idNumber"
+                v-model="formData.idNumber"
+                type="text"
+                required
+                placeholder="1234567890"
+              />
+            </div>
+          </div>
+          <div class="form-row location-row">
+            <div class="form-group">
+              <label for="country">País de Residencia *</label>
+              <select
+                id="country"
+                v-model="formData.country"
+                required
+                @change="loadDepartments(formData.country)"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="pais in paises"
+                  :key="pais.id"
+                  :value="pais.id"
+                >
+                  {{ pais.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="department">Departamento/Estado *</label>
+              <select
+                id="department"
+                v-model="formData.department"
+                required
+                :disabled="!formData.country"
+                @change="loadCities(formData.department)"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="dep in departamentos"
+                  :key="dep.id"
+                  :value="dep.id"
+                >
+                  {{ dep.nombre }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="homeCity">Ciudad de Residencia *</label>
+              <select
+                id="homeCity"
+                v-model="formData.homeCity"
+                required
+                :disabled="!formData.department"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="ciudad in ciudades"
+                  :key="ciudad.id"
+                  :value="ciudad.id"
+                >
+                  {{ ciudad.nombre }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email">Correo Electrónico *</label>
+              <input
+                id="email"
+                v-model="formData.email"
+                type="email"
+                required
+                placeholder="usuario@ucochallenge.com"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="mobileNumber">Teléfono Móvil</label>
+              <input
+                id="mobileNumber"
+                v-model="formData.mobileNumber"
+                type="tel"
+                placeholder="3001234567"
+              />
+            </div>
+          </div>
+
+
+
+          <div class="form-actions">
+            <button type="submit" class="btn-submit" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
+            </button>
+            <button type="button" @click="resetForm" class="btn-reset">
+              Limpiar Formulario
+            </button>
+          </div>
+
+          <div v-if="successMessage" class="message success">
+            {{ successMessage }}
+          </div>
+
+          <div v-if="errorMessage" class="message error">
+            {{ errorMessage }}
+          </div>
+        </form>
       </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="firstSurname">Primer Apellido *</label>
-          <input 
-            id="firstSurname"
-            v-model="formData.firstSurname" 
-            type="text" 
-            required
-            placeholder="Pérez"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="secondSurname">Segundo Apellido</label>
-          <input 
-            id="secondSurname"
-            v-model="formData.secondSurname" 
-            type="text"
-            placeholder="García"
-          />
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label for="idType">Tipo de Identificación *</label>
-          <select 
-            id="idType" 
-            v-model="formData.idType" 
-            required
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="tipo in tiposIdentificacion" 
-              :key="tipo.id" 
-              :value="tipo.id"
-            >
-              {{ tipo.nombre }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="idNumber">Número de Identificación *</label>
-          <input 
-            id="idNumber"
-            v-model="formData.idNumber" 
-            type="text" 
-            required
-            placeholder="1234567890"
-          />
-        </div>
-      </div>
-      <div class="form-row location-row">
-        <div class="form-group">
-          <label for="country">País de Residencia *</label>
-          <select 
-            id="country" 
-            v-model="formData.country" 
-            required
-            @change="loadDepartments(formData.country)"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="pais in paises" 
-              :key="pais.id" 
-              :value="pais.id"
-            >
-              {{ pais.nombre }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="department">Departamento/Estado *</label>
-          <select 
-            id="department" 
-            v-model="formData.department" 
-            required
-            :disabled="!formData.country"
-            @change="loadCities(formData.department)"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="dep in departamentos" 
-              :key="dep.id" 
-              :value="dep.id"
-            >
-              {{ dep.nombre }}
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="homeCity">Ciudad de Residencia *</label>
-          <select 
-            id="homeCity" 
-            v-model="formData.homeCity" 
-            required
-            :disabled="!formData.department"
-          >
-            <option value="">Seleccione...</option>
-            <option 
-              v-for="ciudad in ciudades" 
-              :key="ciudad.id" 
-              :value="ciudad.id"
-            >
-              {{ ciudad.nombre }}
-            </option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="form-row">
-        <div class="form-group">
-          <label for="email">Correo Electrónico *</label>
-          <input 
-            id="email"
-            v-model="formData.email" 
-            type="email" 
-            required
-            placeholder="usuario@ucochallenge.com"
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="mobileNumber">Teléfono Móvil</label>
-          <input 
-            id="mobileNumber"
-            v-model="formData.mobileNumber" 
-            type="tel"
-            placeholder="3001234567"
-          />
-        </div>
-      </div>
-
-
-
-      <div class="form-actions">
-        <button type="submit" class="btn-submit" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
-        </button>
-        <button type="button" @click="resetForm" class="btn-reset">
-          Limpiar Formulario
-        </button>
-      </div>
-
-      <div v-if="successMessage" class="message success">
-        {{ successMessage }}
-      </div>
-      
-      <div v-if="errorMessage" class="message error">
-        {{ errorMessage }}
-      </div>
-    </form>
+    </section>
   </div>
 </template>
 
@@ -212,9 +249,11 @@ const formData = ref({
 
 // Catálogos
 const tiposIdentificacion = ref([]);
-const paises = ref([]); 
-const departamentos = ref([]); 
+const paises = ref([]);
+const departamentos = ref([]);
 const ciudades = ref([]);
+
+const ensureArray = (data) => (Array.isArray(data) ? data : []);
 
 // Estados
 const isSubmitting = ref(false);
@@ -229,14 +268,14 @@ const goBack = () => {
 const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/tipos-identificacion');
-    tiposIdentificacion.value = response.data;
+    tiposIdentificacion.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los tipos de identificación')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar tipos de identificación:', error);
-    // Valores por defecto (Fallback)
-    tiposIdentificacion.value = [
-      { id: '00000000-0000-0000-0000-000000000001', nombre: 'Cédula de Ciudadanía' },
-      { id: '00000000-0000-0000-0000-000000000002', nombre: 'Cédula de Extranjería' },
-    ];
+    tiposIdentificacion.value = [];
+    errorMessage.value = 'No se pudieron cargar los tipos de identificación. Intenta nuevamente.';
   }
 };
 
@@ -244,14 +283,14 @@ const loadIdentificationTypes = async () => {
 const loadCountries = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/paises');
-    paises.value = response.data;
+    paises.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los países')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar países:', error);
-    // Valores por defecto (Fallback)
-    paises.value = [
-      { id: '00000000-0000-0000-0000-000000000099', nombre: 'Colombia' },
-      { id: '00000000-0000-0000-0000-000000000098', nombre: 'México' },
-    ];
+    paises.value = [];
+    errorMessage.value = 'No se pudieron cargar los países. Intenta nuevamente.';
   }
 };
 
@@ -267,16 +306,14 @@ const loadDepartments = async (countryId) => {
 
   try {
     const response = await axiosInstance.get(`/api/v1/paises/${countryId}/departamentos`);
-    departamentos.value = response.data;
+    departamentos.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar los departamentos')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar departamentos:', error);
-    // Valores por defecto (Fallback)
-    if (countryId === '00000000-0000-0000-0000-000000000099') { // Colombia
-      departamentos.value = [
-        { id: '00000000-0000-0000-0000-000000000080', nombre: 'Antioquia' },
-        { id: '00000000-0000-0000-0000-000000000081', nombre: 'Cundinamarca' },
-      ];
-    } 
+    departamentos.value = [];
+    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.';
   }
 };
 
@@ -290,20 +327,14 @@ const loadCities = async (departmentId) => {
 
   try {
     const response = await axiosInstance.get(`/api/v1/departamentos/${departmentId}/ciudades`);
-    ciudades.value = response.data;
+    ciudades.value = ensureArray(response.data);
+    if (errorMessage.value.startsWith('No se pudieron cargar las ciudades')) {
+      errorMessage.value = '';
+    }
   } catch (error) {
     console.error('❌ Error al cargar ciudades:', error);
-    // Valores por defecto (Fallback)
-    if (departmentId === '00000000-0000-0000-0000-000000000080') { // Antioquia
-      ciudades.value = [
-        { id: '00000000-0000-0000-0000-000000000010', nombre: 'Rionegro' },
-        { id: '00000000-0000-0000-0000-000000000011', nombre: 'Medellín' },
-      ];
-    } else if (departmentId === '00000000-0000-0000-0000-000000000081') { // Cundinamarca
-      ciudades.value = [
-        { id: '00000000-0000-0000-0000-000000000012', nombre: 'Bogotá' },
-      ];
-    } 
+    ciudades.value = [];
+    errorMessage.value = 'No se pudieron cargar las ciudades. Intenta nuevamente.';
   }
 };
 
@@ -334,7 +365,7 @@ const handleSubmit = async () => {
     
     // Redirigir al dashboard después de 2 segundos
     setTimeout(() => {
-      router.push({ name: 'Dashboard' });
+      router.push({ name: 'dashboard' });
     }, 2000);
     
   } catch (error) {
@@ -387,213 +418,362 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Contenedor y Header (se mantienen igual) */
+.register-page {
+  position: relative;
+  min-height: 100vh;
+  padding: 70px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top left, rgba(32, 94, 67, 0.45), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(11, 34, 24, 0.7), rgba(5, 13, 10, 0.95));
+  overflow: hidden;
+}
+
+.ambient-light {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  filter: blur(110px);
+  opacity: 0.6;
+  animation: pulse 10s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+.ambient-light--primary {
+  background: #0f766e;
+  top: -120px;
+  left: -150px;
+}
+
+.ambient-light--secondary {
+  background: #6366f1;
+  bottom: -140px;
+  right: -120px;
+  animation-delay: 2.5s;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1) translateY(0px);
+  }
+  to {
+    transform: scale(1.1) translateY(-20px);
+  }
+}
+
+.register-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 48px;
+  max-width: 1180px;
+  width: 100%;
+  backdrop-filter: blur(8px);
+}
+
+.register-hero {
+  padding: 48px;
+  border-radius: 28px;
+  background: linear-gradient(200deg, rgba(30, 64, 55, 0.9), rgba(17, 24, 39, 0.85));
+  color: #f0fdf4;
+  box-shadow: 0 24px 60px rgba(15, 118, 110, 0.25);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.register-hero h1 {
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.register-hero p {
+  color: #cbd5f5;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.hero-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hero-highlights li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hero-highlights .icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 .register-container {
-  max-width: 850px;
-  margin: 40px auto;
-  padding: 40px;
-  background: linear-gradient(180deg, #101c14 0%, #0d1310 100%);
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgba(0, 64, 32, 0.5);
-  transition: transform 0.3s ease;
+  background: rgba(10, 14, 12, 0.85);
+  padding: 42px 44px;
+  border-radius: 26px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(30, 64, 55, 0.35);
   color: #e8f0e6;
+  transition: transform 0.5s ease, box-shadow 0.5s ease;
 }
 
 .register-container:hover {
-  transform: translateY(-3px);
+  transform: translateY(-6px);
+  box-shadow: 0 32px 90px rgba(15, 118, 110, 0.25);
 }
 
 .header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+  gap: 18px;
+}
+
+.badge {
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 35px;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.18);
+  color: #5eead4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .header h2 {
-  font-size: 26px;
+  font-size: 30px;
   font-weight: 700;
-  color: #81c784; 
+  color: #a3e635;
+  margin: 12px 0 6px;
+  letter-spacing: 0.4px;
+}
+
+.subheading {
   margin: 0;
-  letter-spacing: 0.5px;
-  text-shadow: 0 0 5px rgba(129, 199, 132, 0.2);
+  color: #cdd5cc;
+  font-size: 15px;
 }
 
 .btn-back {
-  padding: 10px 18px;
-  background: linear-gradient(90deg, #2e7d32, #388e3c);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(120deg, rgba(56, 189, 248, 0.25), rgba(129, 140, 248, 0.35));
+  color: #e0f2fe;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  border-radius: 12px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .btn-back:hover {
-  transform: scale(1.05);
-  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(56, 189, 248, 0.25);
 }
 
 .register-form {
-  background: #151a17;
-  padding: 35px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 64, 32, 0.3);
+  background: rgba(17, 24, 39, 0.6);
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.12);
   animation: fadeIn 0.6s ease;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(15px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Estilo para las filas de 2 elementos (Nombres, Apellidos, Identificación, Teléfono/Email) */
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 25px;
+  gap: 24px;
   margin-bottom: 20px;
 }
 
-/* Estilo específico para la fila de 3 elementos (País, Departamento, Ciudad) */
 .location-row {
-  grid-template-columns: repeat(3, 1fr); /* 3 columnas iguales */
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  position: relative;
+  gap: 8px;
 }
 
 .form-group label {
-  margin-bottom: 8px;
   font-weight: 600;
-  color: #a5d6a7; 
+  color: #a5d6a7;
   font-size: 14px;
 }
 
 .form-group input,
 .form-group select {
-  padding: 12px;
-  border: 1.5px solid #2f4f4f;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1.5px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
   font-size: 14px;
   transition: all 0.3s ease;
-  background-color: #0e1a13;
-  color: #e8f0e6;
+  background: rgba(15, 23, 42, 0.65);
+  color: #f1f5f9;
+}
+
+.form-group select option {
+  color: #0f172a;
+  background-color: #f8fafc;
 }
 
 .form-group input::placeholder {
-  color: #7a8a7e;
+  color: rgba(226, 232, 240, 0.45);
 }
 
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #66bb6a;
-  background-color: #132218;
-  box-shadow: 0 0 10px rgba(102, 187, 106, 0.3);
+  border-color: #34d399;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18);
 }
 
-/* Estilo para campos de selección deshabilitados */
 .form-group select:disabled {
-  background-color: #1a231b;
-  color: #444;
+  background: rgba(15, 23, 42, 0.4);
+  color: rgba(148, 163, 184, 0.4);
   cursor: not-allowed;
-  opacity: 0.6;
+  border-style: dashed;
 }
 
-
-/* Acciones y Botones (se mantienen igual) */
 .form-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 30px;
+  gap: 14px;
+  margin-top: 32px;
   flex-wrap: wrap;
 }
 
 .btn-submit,
 .btn-reset {
   flex: 1;
-  padding: 14px 30px;
+  padding: 14px 28px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-size: 16px;
   cursor: pointer;
   font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 64, 32, 0.3);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
 }
 
 .btn-submit {
-  background: linear-gradient(90deg, #2e7d32, #388e3c);
-  color: #fff;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #f8fafc;
 }
 
 .btn-submit:hover:not(:disabled) {
-  background: linear-gradient(90deg, #388e3c, #2e7d32);
-  transform: scale(1.05);
-  box-shadow: 0 0 15px rgba(56, 142, 60, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 35px rgba(34, 197, 94, 0.35);
 }
 
 .btn-submit:disabled {
-  background: #444;
+  background: rgba(38, 38, 38, 0.5);
   cursor: not-allowed;
-  color: #888;
+  color: rgba(226, 232, 240, 0.45);
   box-shadow: none;
 }
 
 .btn-reset {
-  background: linear-gradient(90deg, #8b0000, #b22222);
-  color: #fff;
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.9), rgba(239, 68, 68, 0.9));
+  color: #fff5f5;
 }
 
 .btn-reset:hover {
-  background: linear-gradient(90deg, #b22222, #ff4444);
-  transform: scale(1.05);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 35px rgba(248, 113, 113, 0.35);
 }
 
 .message {
-  margin-top: 25px;
-  padding: 15px 18px;
-  border-radius: 8px;
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: 14px;
   font-weight: 600;
   animation: fadeIn 0.4s ease;
 }
 
 .message.success {
-  background: rgba(56, 142, 60, 0.1);
-  color: #81c784;
-  border-left: 4px solid #66bb6a;
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+  border: 1px solid rgba(134, 239, 172, 0.4);
 }
 
 .message.error {
-  background: rgba(255, 0, 0, 0.1);
-  color: #ef5350;
-  border-left: 4px solid #ef5350;
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.35);
 }
 
-/* Media Queries para Responsividad */
+@media (max-width: 1100px) {
+  .register-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .register-hero {
+    order: 2;
+  }
+
+  .register-container {
+    order: 1;
+  }
+}
+
 @media (max-width: 900px) {
-  /* En pantallas medianas (e.g., tablets), la fila de 3 pasa a 2 columnas */
   .location-row {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 768px) {
-  /* En pantallas más pequeñas, todas las filas pasan a 1 columna */
-  .form-row {
-    grid-template-columns: 1fr;
+  .register-page {
+    padding: 48px 18px;
+  }
+
+  .register-hero {
+    padding: 32px;
   }
 
   .register-container {
-    padding: 20px;
+    padding: 32px 26px;
+  }
+
+  .register-form {
+    padding: 26px 22px;
   }
 
   .header {
@@ -601,8 +781,26 @@ onMounted(() => {
     align-items: flex-start;
   }
 
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
   .form-actions {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .register-page {
+    padding: 32px 14px;
+  }
+
+  .register-hero h1 {
+    font-size: 28px;
+  }
+
+  .register-container {
+    padding: 26px 20px;
   }
 }
 </style>
