@@ -1,17 +1,20 @@
 import axios from 'axios';
-import { useAuth0 } from '@auth0/auth0-vue';
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
 });
 
+let auth0Client = null;
+
+export const setAuth0Client = (client) => {
+  auth0Client = client;
+};
+
 apiClient.interceptors.request.use(
   async (config) => {
-    const { isAuthenticated, getAccessTokenSilently } = useAuth0();
-
-    if (isAuthenticated.value) {
+    if (auth0Client?.isAuthenticated?.value) {
       try {
-        const token = await getAccessTokenSilently({
+        const token = await auth0Client.getAccessTokenSilently({
           authorizationParams: {
             audience: import.meta.env.VITE_AUTH0_AUDIENCE
           }
