@@ -239,154 +239,31 @@ const formatSurnames = (user) => {
   return [user.firstSurname, user.secondSurname].filter(Boolean).join(' ') || 'N/A';
 };
 
-const toDisplayText = (value) => {
-  if (value === undefined || value === null) return null;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed.length ? trimmed : null;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return null;
-};
-
-const resolvePath = (source, path) => {
-  if (!path) return undefined;
-  return path.split('.').reduce((accumulator, segment) => {
-    if (accumulator === undefined || accumulator === null) return undefined;
-    return accumulator[segment];
-  }, source);
-};
-
-const pickField = (source, paths, { asString = false, fallback = null } = {}) => {
-  for (const path of paths) {
-    const rawValue = path === '' ? source : resolvePath(source, path);
-    if (rawValue === undefined || rawValue === null) continue;
-
-    if (asString) {
-      const display = toDisplayText(rawValue);
-      if (display !== null) {
-        return display;
-      }
-    } else {
-      return rawValue;
-    }
-  }
-
-  return fallback;
-};
-
 const normalizeUserData = (rawUser) => {
   const emailConfirmed = rawUser.emailConfirmed ?? rawUser.emailConfirmado ?? rawUser.email_confirmation ?? false;
   const mobileNumberConfirmed = rawUser.mobileNumberConfirmed ?? rawUser.telefonoMovilConfirmado ?? rawUser.mobile_number_confirmed ?? false;
 
-  const idTypeName = pickField(
-    rawUser,
-    [
-      'idTypeName',
-      'identificationTypeName',
-      'tipoIdentificacionNombre',
-      'tipoDocumentoNombre',
-      'tipoDocumento',
-      'tipoIdentificacionDescripcion',
-      'tipoIdentificacionNombreLargo',
-      'tipoIdentificacion',
-      'idType.name',
-      'idType.nombre',
-      'idType.descripcion',
-      'tipoIdentificacion.nombre',
-      'tipoIdentificacion.descripcion',
-      'tipoIdentificacion.label',
-      'identificationType.name',
-      'identificationType.nombre',
-      'identificationType.descripcion',
-      'identificationType.descripcionLarga',
-      'identificationType.displayName',
-      'identificationType.label'
-    ],
-    { asString: true, fallback: 'N/A' }
-  );
-
-  const cityName = pickField(
-    rawUser,
-    [
-      'homeCityName',
-      'cityName',
-      'ciudadResidenciaNombre',
-      'ciudadResidencia.nombre',
-      'ciudadResidencia.name',
-      'ciudadResidencia.descripcion',
-      'ciudadResidencia',
-      'ciudad.nombre',
-      'ciudad.descripcion',
-      'ciudad.label',
-      'homeCity.nombre',
-      'homeCity.name',
-      'homeCity.descripcion',
-      'homeCity.label',
-      'homeCity.displayName',
-      'homeCity.cityName',
-      'homeCity.city',
-      'city.nombre',
-      'city.name',
-      'city.descripcion',
-      'city.label',
-      'city.displayName'
-    ],
-    { asString: true, fallback: 'N/A' }
-  );
-
-  const departmentName = pickField(
-    rawUser,
-    [
-      'homeDepartmentName',
-      'departamentoResidencia',
-      'departamentoResidencia.nombre',
-      'departamentoResidencia.name',
-      'departamentoResidencia.descripcion',
-      'departamentoResidenciaNombre',
-      'departamentoResidenciaDescripcion',
-      'departmentName',
-      'department.nombre',
-      'department.name',
-      'department.descripcion',
-      'department.displayName',
-      'homeDepartment.nombre',
-      'homeDepartment.name',
-      'homeDepartment.descripcion',
-      'homeDepartment.displayName',
-      'homeCity.departamento.nombre',
-      'homeCity.departamento.descripcion',
-      'homeCity.department.name',
-      'homeCity.department.descripcion'
-    ],
-    { asString: true, fallback: null }
-  );
-
   return {
     id: rawUser.id,
-    idTypeId: pickField(
-      rawUser,
-      [
-        'idType',
-        'idTypeId',
-        'identificationTypeId',
-        'tipoIdentificacionId',
-        'tipoDocumentoId',
-        'tipoIdentificacion.id',
-        'identificationType.id'
-      ],
-      { fallback: null }
-    ),
-    idTypeName,
+    idTypeId: rawUser.idType ?? rawUser.tipoIdentificacionId ?? rawUser.tipoIdentificacion ?? null,
+    idTypeName:
+      rawUser.idTypeName ??
+      rawUser.tipoIdentificacionNombre ??
+      rawUser.tipoDocumento ??
+      rawUser.tipoIdentificacion ??
+      'N/A',
     idNumber: rawUser.idNumber ?? rawUser.numeroIdentificacion ?? null,
     firstName: rawUser.firstName ?? rawUser.primerNombre ?? null,
     secondName: rawUser.secondName ?? rawUser.segundoNombre ?? null,
     firstSurname: rawUser.firstSurname ?? rawUser.primerApellido ?? null,
     secondSurname: rawUser.secondSurname ?? rawUser.segundoApellido ?? null,
-    cityName,
-    departmentName,
+    cityName:
+      rawUser.homeCityName ??
+      rawUser.ciudadResidenciaNombre ??
+      rawUser.ciudadResidencia ??
+      rawUser.cityName ??
+      'N/A',
+    departmentName: rawUser.homeDepartmentName ?? rawUser.departamentoResidencia ?? null,
     email: rawUser.email ?? '—',
     mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
     emailConfirmed,
