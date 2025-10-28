@@ -177,6 +177,263 @@ import axiosInstance from '../http/axiosInstance';
 const router = useRouter();
 const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
 
+const defaultIdKeys = ['id', 'uuid', 'codigo', 'code', 'value', 'valor'];
+const defaultLabelKeys = ['nombre', 'name', 'descripcion', 'description', 'detalle', 'label'];
+
+const getValueAtPath = (source, path) => {
+  if (!path) return undefined;
+  const segments = path.split('.');
+  let current = source;
+  for (const segment of segments) {
+    if (current === undefined || current === null) return undefined;
+    current = current?.[segment];
+  }
+  return current;
+};
+
+const toDisplayString = (value) => {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return null;
+};
+
+const resolveTextValue = (value) => {
+  const direct = toDisplayString(value);
+  if (direct !== null) return direct;
+
+  if (value && typeof value === 'object') {
+    for (const key of defaultLabelKeys) {
+      const nested = value?.[key];
+      const resolved = resolveTextValue(nested);
+      if (resolved !== null) return resolved;
+    }
+  }
+
+  return null;
+};
+
+const resolveIdValue = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return String(value);
+
+  if (typeof value === 'object') {
+    for (const key of defaultIdKeys) {
+      if (Object.prototype.hasOwnProperty.call(value, key)) {
+        const nested = resolveIdValue(value[key]);
+        if (nested) return nested;
+      }
+    }
+  }
+
+  return null;
+};
+
+const pickTextValue = (source, keys = []) => {
+  for (const key of keys) {
+    const candidate = key.includes('.') ? getValueAtPath(source, key) : source?.[key];
+    const resolved = resolveTextValue(candidate);
+    if (resolved !== null) return resolved;
+  }
+  return null;
+};
+
+const pickIdValue = (source, keys = []) => {
+  for (const key of keys) {
+    const candidate = key.includes('.') ? getValueAtPath(source, key) : source?.[key];
+    const resolved = resolveIdValue(candidate);
+    if (resolved) return resolved;
+  }
+  return null;
+};
+
+const unwrapCollection = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (payload && typeof payload === 'object') {
+    const candidateKeys = ['data', 'content', 'results', 'items', 'value', 'values'];
+    for (const key of candidateKeys) {
+      if (Array.isArray(payload?.[key])) return payload[key];
+    }
+  }
+  return [];
+};
+
+const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
+  const collection = unwrapCollection(payload);
+  return collection
+    .map((entry) => {
+      const id = pickIdValue(entry, [...idKeys, ...defaultIdKeys]);
+      if (!id) return null;
+
+      const label =
+        pickTextValue(entry, [...labelKeys, ...defaultLabelKeys]) || id;
+
+      return {
+        id,
+        label,
+        raw: entry
+      };
+    })
+    .filter(Boolean);
+};
+
+const idTypeCatalog = new Map();
+const cityCatalog = new Map();
+
+const ensureIdentificationTypesCatalog = async () => {
+  if (idTypeCatalog.size) return idTypeCatalog;
+  try {
+    const response = await axiosInstance.get('/api/v1/catalogo/tipos-documento');
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'descripcionCorta', 'abreviatura', 'tipoDocumento'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    catalog.forEach((item) => {
+      idTypeCatalog.set(item.id, item);
+    });
+  } catch (error) {
+    console.error('❌ Error al cargar catálogo de tipos de identificación en dashboard:', error);
+  }
+  return idTypeCatalog;
+};
+
+const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
+  const missingIds = cityIds.filter((id) => id && !cityCatalog.has(id));
+  if (!missingIds.length) return cityCatalog;
+
+  const registerEntries = (entries) => {
+    entries.forEach((item) => {
+      if (!item || cityCatalog.has(item.id)) return;
+      const departmentData = pickValueForDepartment(item.raw);
+      cityCatalog.set(item.id, {
+        ...item,
+        department: departmentData
+      });
+    });
+  };
+
+  try {
+    const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
+      params: { ids: missingIds.join(',') }
+    });
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'ciudad'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    registerEntries(catalog);
+  } catch (error) {
+    console.warn('⚠️ No se pudieron cargar las ciudades por IDs, intentando por departamentos.', error);
+
+    const groupedByDepartment = new Map();
+    usersContext.forEach((user) => {
+      if (!user.departmentId) return;
+      if (!missingIds.includes(user.cityId)) return;
+      if (!groupedByDepartment.has(user.departmentId)) {
+        groupedByDepartment.set(user.departmentId, new Set());
+      }
+      groupedByDepartment.get(user.departmentId).add(user.cityId);
+    });
+
+    for (const [departmentId] of groupedByDepartment) {
+      try {
+        const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
+          params: { departamentoId }
+        });
+        const catalog = normalizeCatalog(response.data, {
+          labelKeys: ['nombre', 'descripcion', 'name', 'ciudad'],
+          idKeys: ['id', 'uuid', 'codigo', 'code']
+        });
+        registerEntries(catalog);
+      } catch (deptError) {
+        console.error(`❌ Error al cargar ciudades para el departamento ${departmentId}:`, deptError);
+      }
+    }
+  }
+
+  return cityCatalog;
+};
+
+const pickValueForDepartment = (rawCity) => {
+  if (!rawCity || typeof rawCity !== 'object') return null;
+
+  const departmentId = pickIdValue(rawCity, ['departamentoId', 'departmentId', 'departamento.id', 'departamento']);
+  if (!departmentId) return null;
+
+  const departmentLabel =
+    pickTextValue(rawCity, ['departamentoNombre', 'departmentName', 'departamento']) || departmentId;
+
+  const departmentRaw = rawCity.departamento || rawCity.department || rawCity;
+
+  return {
+    id: departmentId,
+    label: departmentLabel,
+    raw: departmentRaw
+  };
+};
+
+const populateCatalogData = async (userList) => {
+  const missingIdTypeIds = [...new Set(
+    userList
+      .filter((user) => (!user.idTypeName || user.idTypeName === 'N/A') && user.idTypeId)
+      .map((user) => user.idTypeId)
+  )];
+
+  if (missingIdTypeIds.length) {
+    await ensureIdentificationTypesCatalog();
+    userList.forEach((user) => {
+      if ((!user.idTypeName || user.idTypeName === 'N/A') && user.idTypeId) {
+        const catalogEntry = idTypeCatalog.get(user.idTypeId);
+        if (catalogEntry?.label) {
+          user.idTypeName = catalogEntry.label;
+        }
+      }
+    });
+  }
+
+  const missingCityIds = [...new Set(
+    userList
+      .filter((user) => (!user.cityName || user.cityName === 'N/A') && user.cityId)
+      .map((user) => user.cityId)
+  )];
+
+  if (missingCityIds.length) {
+    await ensureCitiesCatalog(missingCityIds, userList);
+    userList.forEach((user) => {
+      if ((!user.cityName || user.cityName === 'N/A') && user.cityId) {
+        const cityEntry = cityCatalog.get(user.cityId);
+        if (cityEntry?.label) {
+          user.cityName = cityEntry.label;
+        }
+        const departmentEntry = cityEntry?.department ?? pickValueForDepartment(cityEntry?.raw);
+        if (departmentEntry) {
+          user.departmentId = user.departmentId || departmentEntry.id;
+          if (!user.departmentName || user.departmentName === 'N/A') {
+            user.departmentName = departmentEntry.label;
+          }
+        }
+      }
+    });
+  }
+
+  userList.forEach((user) => {
+    if (!user.idTypeName || user.idTypeName === 'N/A') {
+      user.idTypeName = user.idTypeId || '—';
+    }
+    if (!user.cityName || user.cityName === 'N/A') {
+      user.cityName = user.cityId || '—';
+    }
+    if (!user.departmentName || user.departmentName === 'N/A') {
+      user.departmentName = user.departmentId || null;
+    }
+  });
+};
+
 const users = ref([]);
 const isLoading = ref(false);
 const apiError = ref(null);
@@ -243,27 +500,89 @@ const normalizeUserData = (rawUser) => {
   const emailConfirmed = rawUser.emailConfirmed ?? rawUser.emailConfirmado ?? rawUser.email_confirmation ?? false;
   const mobileNumberConfirmed = rawUser.mobileNumberConfirmed ?? rawUser.telefonoMovilConfirmado ?? rawUser.mobile_number_confirmed ?? false;
 
+  const idTypeId =
+    pickIdValue(rawUser, [
+      'idTypeId',
+      'idType',
+      'tipoIdentificacionId',
+      'tipoIdentificacion'
+    ]) || null;
+
+  const cityId =
+    pickIdValue(rawUser, [
+      'homeCityId',
+      'homeCity',
+      'ciudadResidenciaId',
+      'ciudadResidencia',
+      'cityId',
+      'homeCity.cityId'
+    ]) || null;
+
+  const departmentId =
+    pickIdValue(rawUser, [
+      'departmentId',
+      'department',
+      'departamentoId',
+      'departamento',
+      'homeDepartmentId',
+      'homeDepartment',
+      'homeCity.departamento',
+      'homeCity.department'
+    ]) || null;
+
+  const countryId =
+    pickIdValue(rawUser, [
+      'countryId',
+      'country',
+      'paisId',
+      'pais',
+      'homeCountryId',
+      'homeCountry',
+      'homeCity.departamento.pais',
+      'homeCity.department.country'
+    ]) || null;
+
+  const idTypeName =
+    pickTextValue(rawUser, [
+      'idTypeName',
+      'tipoIdentificacionNombre',
+      'tipoDocumento',
+      'tipoIdentificacion',
+      'idType'
+    ]) || 'N/A';
+
+  const cityName =
+    pickTextValue(rawUser, [
+      'homeCityName',
+      'ciudadResidenciaNombre',
+      'ciudadResidencia',
+      'cityName',
+      'homeCity'
+    ]) || 'N/A';
+
+  const departmentName =
+    pickTextValue(rawUser, [
+      'homeDepartmentName',
+      'departamentoResidencia',
+      'departmentName',
+      'homeCity.departamento',
+      'homeCity.department'
+    ]) || null;
+
   return {
     id: rawUser.id,
-    idTypeId: rawUser.idType ?? rawUser.tipoIdentificacionId ?? rawUser.tipoIdentificacion ?? null,
-    idTypeName:
-      rawUser.idTypeName ??
-      rawUser.tipoIdentificacionNombre ??
-      rawUser.tipoDocumento ??
-      rawUser.tipoIdentificacion ??
-      'N/A',
+    idTypeId,
+    idTypeName,
     idNumber: rawUser.idNumber ?? rawUser.numeroIdentificacion ?? null,
     firstName: rawUser.firstName ?? rawUser.primerNombre ?? null,
     secondName: rawUser.secondName ?? rawUser.segundoNombre ?? null,
     firstSurname: rawUser.firstSurname ?? rawUser.primerApellido ?? null,
     secondSurname: rawUser.secondSurname ?? rawUser.segundoApellido ?? null,
-    cityName:
-      rawUser.homeCityName ??
-      rawUser.ciudadResidenciaNombre ??
-      rawUser.ciudadResidencia ??
-      rawUser.cityName ??
-      'N/A',
-    departmentName: rawUser.homeDepartmentName ?? rawUser.departamentoResidencia ?? null,
+    cityId,
+    cityName,
+    departmentId,
+    departmentName,
+    countryId,
     email: rawUser.email ?? '—',
     mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
     emailConfirmed,
@@ -280,6 +599,7 @@ const fetchData = async () => {
     const response = await axiosInstance.get('/api/v1/usuarios');
     const rawUsers = Array.isArray(response.data) ? response.data : [];
     users.value = rawUsers.map(normalizeUserData);
+    await populateCatalogData(users.value);
     if (currentPage.value > totalPages.value) {
       currentPage.value = totalPages.value;
     }
