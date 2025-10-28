@@ -161,7 +161,7 @@ import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
 
 const router = useRouter();
-const { logout: auth0Logout, getAccessTokenSilently } = useAuth0();
+const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
 
 const users = ref([]);
 const isLoading = ref(false);
@@ -308,11 +308,13 @@ const previousPage = () => {
 
 onMounted(async () => {
   try {
-    await getAccessTokenSilently({
-      authorizationParams: {
-        audience: import.meta.env.VITE_AUTH0_AUDIENCE
-      }
+    const token = await getAccessTokenSilently({
+      authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE }
     });
+
+    console.log('🔐 Access Token:', token);
+    console.log('👤 User:', user.value);
+    console.log('✅ isAuthenticated:', isAuthenticated.value);
 
     await fetchData();
   } catch (error) {

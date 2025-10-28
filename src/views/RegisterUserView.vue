@@ -266,7 +266,7 @@ const goBack = () => {
 // Cargar tipos de identificaciOn
 const loadIdentificationTypes = async () => {
   try {
-    const response = await axiosInstance.get('/api/v1/tipos-identificacion');
+    const response = await axiosInstance.get('/api/v1/catalogo/tipos-documento');
     tiposIdentificacion.value = ensureArray(response.data);
     if (errorMessage.value.startsWith('No se pudieron cargar los tipos de identificación')) {
       errorMessage.value = '';
@@ -281,7 +281,7 @@ const loadIdentificationTypes = async () => {
 // Cargar países
 const loadCountries = async () => {
   try {
-    const response = await axiosInstance.get('/api/v1/paises');
+    const response = await axiosInstance.get('/api/v1/catalogo/paises');
     paises.value = ensureArray(response.data);
     if (errorMessage.value.startsWith('No se pudieron cargar los países')) {
       errorMessage.value = '';
@@ -304,7 +304,7 @@ const loadDepartments = async (countryId) => {
   if (!countryId) return;
 
   try {
-    const response = await axiosInstance.get(`/api/v1/paises/${countryId}/departamentos`);
+    const response = await axiosInstance.get('/api/v1/catalogo/departamentos', { params: { paisId: countryId }});
     departamentos.value = ensureArray(response.data);
     if (errorMessage.value.startsWith('No se pudieron cargar los departamentos')) {
       errorMessage.value = '';
@@ -325,7 +325,7 @@ const loadCities = async (departmentId) => {
   if (!departmentId) return;
 
   try {
-    const response = await axiosInstance.get(`/api/v1/departamentos/${departmentId}/ciudades`);
+    const response = await axiosInstance.get('/api/v1/catalogo/ciudades', { params: { departamentoId: departmentId }});
     ciudades.value = ensureArray(response.data);
     if (errorMessage.value.startsWith('No se pudieron cargar las ciudades')) {
       errorMessage.value = '';
@@ -358,7 +358,7 @@ const handleSubmit = async () => {
 
     console.log('📤 Enviando payload:', payload);
     
-    const response = await axiosInstance.post('/api/v1/usuarios/register', payload);
+    const response = await axiosInstance.post('/api/v1/usuarios', payload);
     
     successMessage.value = '✅ Usuario registrado exitosamente';
     
@@ -665,6 +665,17 @@ onMounted(() => {
   border-style: dashed;
 }
 
+.form-group select option,
+.form-group select optgroup {
+  background: #0f172a;   /* fondo oscuro */
+  color: #a7f3d0;        /* texto verde menta */
+}
+
+.form-group select:focus option:checked {
+  background-color: #22c55e; /* verde seleccionado */
+  color: #ffffff;
+}
+
 .form-actions {
   display: flex;
   gap: 14px;
@@ -796,5 +807,38 @@ onMounted(() => {
   .register-container {
     padding: 26px 20px;
   }
+
+  /* ==== FIX VISIBILIDAD DE OPCIONES EN SELECT ==== */
+
+/* fuerza esquema claro en el menú nativo */
+.form-group select {
+  background-color: #ffffff !important;
+  color: #0f172a !important; /* texto oscuro */
+  color-scheme: light; /* usa menú claro del sistema */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* estilos del popup (opciones desplegadas) */
+.form-group select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* color de la opción seleccionada */
+.form-group select:focus option:checked {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+}
+
+/* fallback: Windows oscuro + Chrome */
+@media (prefers-color-scheme: dark) {
+  select,
+  option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
+
 }
 </style>
