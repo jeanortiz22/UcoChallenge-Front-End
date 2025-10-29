@@ -1,173 +1,271 @@
 <template>
-  <div class="dashboard-shell">
-    <div class="background-visuals" aria-hidden="true">
-      <div class="orb orb-one"></div>
-      <div class="orb orb-two"></div>
-    </div>
+  <div class="register-page">
+    <div class="ambient-light ambient-light--primary"></div>
+    <div class="ambient-light ambient-light--secondary"></div>
 
-    <header class="dashboard-hero">
-      <div class="hero-copy">
-        <p class="eyebrow">Panel de control</p>
-        <h1>Gestiona y verifica a tus delegados con claridad</h1>
+    <section class="register-layout">
+      <aside class="register-hero">
+        <h1>Impulsa el talento con una experiencia memorable</h1>
         <p>
-          Visualiza el estado de autenticación de cada usuario, confirma canales
-          pendientes y mantén tu organización sincronizada en tiempo real.
+          Gestiona el registro de nuevos usuarios con un flujo claro, envolvente y
+          pensado para crear confianza desde el primer clic.
         </p>
-        <div class="hero-actions">
-          <button @click="goToRegister" class="btn btn-primary">
-            + Registrar nuevo usuario
-          </button>
-          <button @click="logout" class="btn btn-ghost">
-            Cerrar sesión
-          </button>
-        </div>
-      </div>
-      <div class="hero-summary">
-        <div class="summary-card">
-          <p class="summary-label">Usuarios totales</p>
-          <p class="summary-value">{{ totalUsers }}</p>
-        </div>
-        <div class="summary-card">
-          <p class="summary-label">Autenticados</p>
-          <p class="summary-value positive">{{ verifiedUsers }}</p>
-          <span class="summary-foot">{{ verifiedRate }}% del total</span>
-        </div>
-        <div class="summary-card">
-          <p class="summary-label">Pendientes</p>
-          <p class="summary-value warning">{{ pendingUsers }}</p>
-          <span class="summary-foot">{{ partialUsers }} con avances</span>
-        </div>
-      </div>
-    </header>
 
-    <section v-if="isLoading" class="state-card">
-      <span class="spinner" aria-hidden="true"></span>
-      <p>Cargando usuarios…</p>
-    </section>
+        <ul class="hero-highlights">
+          <li>
+            <span class="icon">⚡</span>
+            Validaciones en tiempo real sobre la información clave.
+          </li>
+          <li>
+            <span class="icon">🌍</span>
+            Catálogos dinámicos conectados con la base de datos oficial.
+          </li>
+          <li>
+            <span class="icon">🛡️</span>
+            Seguridad reforzada con autenticación y trazabilidad.
+          </li>
+        </ul>
+      </aside>
 
-    <section v-else-if="apiError" class="state-card error">
-      <div>
-        <h2>Hubo un problema al conectar</h2>
-        <p>{{ apiError }}</p>
-      </div>
-      <button @click="fetchData" class="btn btn-primary">Reintentar</button>
-    </section>
-
-    <section v-else-if="users.length === 0" class="state-card empty">
-      <h2>Aún no tienes usuarios registrados</h2>
-      <p>Comienza registrando a tu primer delegado en la plataforma.</p>
-      <button @click="goToRegister" class="btn btn-primary">
-        Registrar primer usuario
-      </button>
-    </section>
-
-    <section v-else class="data-section">
-      <div class="data-header">
-        <div>
-          <h2>Usuarios registrados</h2>
-          <p>Visualiza rápidamente el estado de autenticación de cada persona.</p>
+      <div class="register-container">
+        <div class="header">
+          <div>
+            <p class="badge">Nuevo ingreso</p>
+            <h2>Registrar Nuevo Usuario</h2>
+            <p class="subheading">
+              Completa los datos del participante para activar su cuenta en la
+              plataforma.
+            </p>
+          </div>
+          <button @click="goBack" class="btn-back">← Volver al Panel de control</button>
         </div>
-        <button @click="fetchData" class="btn btn-ghost">Actualizar</button>
-      </div>
 
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Tipo de identificación</th>
-              <th>Número</th>
-              <th>Nombres</th>
-              <th>Apellidos</th>
-              <th>Ciudad</th>
-              <th>Correo</th>
-              <th>Teléfono</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="user in paginatedUsers" :key="user.id">
-              <td><span class="chip">{{ user.idTypeName }}</span></td>
-              <td>{{ user.idNumber || 'N/A' }}</td>
-              <td class="name-cell"><p class="primary">{{ formatNames(user) }}</p></td>
-              <td><p class="primary">{{ formatSurnames(user) }}</p></td>
-              <td>
-                <p class="primary">{{ user.cityName }}</p>
-                <p class="secondary" v-if="user.departmentName">{{ user.departmentName }}</p>
-              </td>
-              <td>
-                <p class="primary">{{ user.email }}</p>
-                <p class="secondary">{{ user.emailConfirmed ? 'Verificado' : 'Pendiente' }}</p>
-              </td>
-              <td>
-                <p class="primary">{{ user.mobileNumber || 'N/A' }}</p>
-                <p class="secondary">
-                  {{ user.mobileNumber ? (user.mobileNumberConfirmed ? 'Verificado' : 'Pendiente') : 'Sin teléfono' }}
-                </p>
-              </td>
-              <td>
-                <span :class="getStatusClass(user)">{{ getStatusText(user) }}</span>
-              </td>
-              <td class="actions">
-                <button
-                  @click="confirmEmail(user.id)"
-                  class="btn-action email"
-                  title="Confirmar email"
-                  :disabled="user.emailConfirmed"
+        <form @submit.prevent="handleSubmit" class="register-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstName">Primer Nombre *</label>
+              <input
+                id="firstName"
+                v-model="formData.firstName"
+                type="text"
+                required
+                placeholder="Juan"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="secondName">Segundo Nombre</label>
+              <input
+                id="secondName"
+                v-model="formData.secondName"
+                type="text"
+                placeholder="Carlos"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstSurname">Primer Apellido *</label>
+              <input
+                id="firstSurname"
+                v-model="formData.firstSurname"
+                type="text"
+                required
+                placeholder="Pérez"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="secondSurname">Segundo Apellido</label>
+              <input
+                id="secondSurname"
+                v-model="formData.secondSurname"
+                type="text"
+                placeholder="García"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="idType">Tipo de Identificación *</label>
+              <select
+                id="idType"
+                v-model="formData.idType"
+                required
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="tipo in tiposIdentificacion"
+                  :key="tipo.id"
+                  :value="tipo.id"
                 >
-                  {{ user.emailConfirmed ? 'Email verificado' : 'Confirmar email' }}
-                </button>
-                <button
-                  @click="confirmPhone(user.id)"
-                  class="btn-action phone"
-                  title="Confirmar teléfono"
-                  :disabled="!user.mobileNumber || user.mobileNumberConfirmed"
+                  {{ tipo.label }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="idNumber">Número de Identificación *</label>
+              <input
+                id="idNumber"
+                v-model="formData.idNumber"
+                type="text"
+                required
+                placeholder="1234567890"
+              />
+            </div>
+          </div>
+          <div class="form-row location-row">
+            <div class="form-group">
+              <label for="country">País de Residencia *</label>
+              <select
+                id="country"
+                v-model="formData.country"
+                required
+                @change="loadDepartments(formData.country)"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="pais in paises"
+                  :key="pais.id"
+                  :value="pais.id"
                 >
-                  <template v-if="!user.mobileNumber">Sin teléfono</template>
-                  <template v-else>{{ user.mobileNumberConfirmed ? 'Teléfono verificado' : 'Confirmar teléfono' }}</template>
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+                  {{ pais.label }}
+                </option>
+              </select>
+            </div>
 
-      <footer class="pagination">
-        <button @click="previousPage" :disabled="currentPage === 1" class="btn btn-ghost">← Anterior</button>
-        <div class="page-info">
-          Página {{ currentPage }} de {{ totalPages }}
-          <span class="range">({{ rangeStart }} - {{ rangeEnd }} de {{ users.length }})</span>
-        </div>
-        <button @click="nextPage" :disabled="currentPage === totalPages" class="btn btn-ghost">Siguiente →</button>
-      </footer>
+            <div class="form-group">
+              <label for="department">Departamento/Estado *</label>
+              <select
+                id="department"
+                v-model="formData.department"
+                required
+                :disabled="!formData.country"
+                @change="loadCities(formData.department)"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="dep in departamentos"
+                  :key="dep.id"
+                  :value="dep.id"
+                >
+                  {{ dep.label }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="homeCity">Ciudad de Residencia *</label>
+              <select
+                id="homeCity"
+                v-model="formData.homeCity"
+                required
+                :disabled="!formData.department"
+              >
+                <option value="">Seleccione...</option>
+                <option
+                  v-for="ciudad in ciudades"
+                  :key="ciudad.id"
+                  :value="ciudad.id"
+                >
+                  {{ ciudad.label }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="email">Correo Electrónico *</label>
+              <input
+                id="email"
+                v-model="formData.email"
+                type="email"
+                required
+                placeholder="usuario@ucochallenge.com"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="mobileNumber">Teléfono Móvil</label>
+              <input
+                id="mobileNumber"
+                v-model="formData.mobileNumber"
+                type="tel"
+                placeholder="3001234567"
+              />
+            </div>
+          </div>
+
+
+
+          <div class="form-actions">
+            <button type="submit" class="btn-submit" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Registrando...' : 'Registrar Usuario' }}
+            </button>
+            <button type="button" @click="resetForm" class="btn-reset">
+              Limpiar Formulario
+            </button>
+          </div>
+
+          <div v-if="successMessage" class="message success">
+            {{ successMessage }}
+          </div>
+
+          <div v-if="errorMessage" class="message error">
+            {{ errorMessage }}
+          </div>
+        </form>
+      </div>
     </section>
-
-    <transition name="toast">
-      <div v-if="successMessage" class="toast">
-        {{ successMessage }}
-      </div>
-    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuth0 } from '@auth0/auth0-vue';
-import axiosInstance from '../http/axiosInstance';
+import axiosInstance from '../http/axiosInstance'; 
 
 const router = useRouter();
-const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
 
-/* ==================== Utils compartidos (idénticos al registro) ==================== */
+// Form data matching RegisterUserDomain + new location fields
+const formData = ref({
+  idType: '', 
+  idNumber: '', 
+  firstName: '',
+  secondName: '',
+  firstSurname: '',
+  secondSurname: '',
+  country: '',  
+  department: '',
+  homeCity: '',   
+  email: '', 
+  mobileNumber: ''
+});
+
+// Catálogos
+const tiposIdentificacion = ref([]);
+const paises = ref([]);
+const departamentos = ref([]);
+const ciudades = ref([]);
+
 const unwrapCollection = (payload) => {
-  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
   if (payload && typeof payload === 'object') {
     const candidateKeys = ['data', 'content', 'results', 'items', 'value', 'values'];
     for (const key of candidateKeys) {
-      if (Array.isArray(payload?.[key])) return payload[key];
+      if (Array.isArray(payload[key])) {
+        return payload[key];
+      }
     }
   }
+
   return [];
 };
 
@@ -181,7 +279,9 @@ const toDisplayString = (value) => {
 const pickFirstAvailable = (item, keys = []) => {
   for (const key of keys) {
     const label = toDisplayString(item?.[key]);
-    if (label) return label;
+    if (label) {
+      return label;
+    }
   }
   return '';
 };
@@ -190,7 +290,9 @@ const pickIdValue = (item, keys = []) => {
   const defaultKeys = ['id', 'uuid', 'codigo', 'code', 'value', 'valor'];
   for (const key of [...keys, ...defaultKeys]) {
     const raw = item?.[key];
-    if (raw !== undefined && raw !== null && raw !== '') return String(raw);
+    if (raw !== undefined && raw !== null && raw !== '') {
+      return String(raw);
+    }
   }
   return undefined;
 };
@@ -201,450 +303,638 @@ const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
     .map((entry) => {
       const id = pickIdValue(entry, idKeys);
       if (!id) return null;
-      const label = pickFirstAvailable(entry, [
-        ...labelKeys,
-        'nombre','name','descripcion','description','detalle','label'
-      ]) || id;
-      return { id, label, raw: entry };
+
+      const label =
+        pickFirstAvailable(entry, [...labelKeys, 'nombre', 'name', 'descripcion', 'description', 'detalle', 'label']) || id;
+
+      return {
+        id,
+        label,
+        raw: entry
+      };
     })
     .filter(Boolean);
 };
 
-// Detecta UUID v1–v5
-const isLikelyId = (v) =>
-  typeof v === 'string' &&
-  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/.test(v);
+// Estados
+const isSubmitting = ref(false);
+const successMessage = ref('');
+const errorMessage = ref('');
 
-/* ==================== Catálogos en memoria ==================== */
-const idTypeCatalog = new Map();
-const cityCatalog = new Map();
+const goBack = () => {
+  router.push({ name: 'dashboard' });
+};
 
-/* ==================== Carga catálogos ==================== */
-const ensureIdentificationTypesCatalog = async () => {
-  if (idTypeCatalog.size) return idTypeCatalog;
+// Cargar tipos de identificaciOn
+const loadIdentificationTypes = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/tipos-documento');
     const catalog = normalizeCatalog(response.data, {
-      labelKeys: ['name','nombre','descripcion','descripcionCorta','abreviatura','tipoDocumento'],
-      idKeys: ['id','uuid','codigo','code']
+      labelKeys: ['nombre', 'descripcion', 'descripcionCorta', 'abreviatura', 'tipoDocumento'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
     });
-    catalog.forEach((item) => idTypeCatalog.set(item.id, item));
+    tiposIdentificacion.value = catalog;
+    if (errorMessage.value.startsWith('No se pudieron cargar los tipos de identificación')) {
+      errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de tipos de identificación vacío o con formato desconocido:', response.data);
+    }
   } catch (error) {
-    console.error('❌ Error catálogo tipos identificación:', error);
+    console.error('❌ Error al cargar tipos de identificación:', error);
+    tiposIdentificacion.value = [];
+    errorMessage.value = 'No se pudieron cargar los tipos de identificación. Intenta nuevamente.';
   }
-  return idTypeCatalog;
 };
 
-const pickValueForDepartment = (rawCity) => {
-  if (!rawCity || typeof rawCity !== 'object') return null;
-
-  const departmentId = pickIdValue(rawCity, [
-    'departamentoId','departmentId','departamento.id','departamento',
-    'department.id','department'
-  ]);
-  if (!departmentId) return null;
-
-  const departmentLabel = pickFirstAvailable(rawCity, [
-    'departamentoNombre','departmentName','departamento',
-    'department.nombre','department.name','department'
-  ]) || departmentId;
-
-  const departmentRaw = rawCity.departamento || rawCity.department || rawCity;
-  return { id: departmentId, label: departmentLabel, raw: departmentRaw };
-};
-
-const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
-  const missingIds = cityIds.filter((id) => id && !cityCatalog.has(id));
-  if (!missingIds.length) return cityCatalog;
-
-  const registerEntries = (entries) => {
-    entries.forEach((item) => {
-      if (!item || cityCatalog.has(item.id)) return;
-      const departmentData = pickValueForDepartment(item.raw);
-      cityCatalog.set(item.id, { ...item, department: departmentData });
-    });
-  };
-
-  const labelKeysCity = [
-    'name','nombre','descripcion','ciudad','ciudadNombre','city',
-    'nombreCiudad','nombre_ciudad','cityName','nombreOficial','nombre_oficial'
-  ];
-  const idKeysCity = ['id','uuid','codigo','code','ciudadId','cityId'];
-
-  // 1) Intento por batch ?ids=
+// Cargar países
+const loadCountries = async () => {
   try {
-    const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
-      params: { ids: missingIds.join(',') }
+    const response = await axiosInstance.get('/api/v1/catalogo/paises');
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'pais'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
     });
-    const catalog = normalizeCatalog(response.data, { labelKeys: labelKeysCity, idKeys: idKeysCity });
-    if (catalog.length) registerEntries(catalog);
+    paises.value = catalog;
+    if (errorMessage.value.startsWith('No se pudieron cargar los países')) {
+      errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de países vacío o con formato desconocido:', response.data);
+    }
   } catch (error) {
-    console.warn('⚠️ Batch ciudades por ids falló (ok si no existe):', error);
+    console.error('❌ Error al cargar países:', error);
+    paises.value = [];
+    errorMessage.value = 'No se pudieron cargar los países. Intenta nuevamente.';
   }
-
-  // 2) Por departamento (plan principal como en registro)
-  const groupedByDepartment = new Map();
-  usersContext.forEach((u) => {
-    if (!u.departmentId) return;
-    if (!missingIds.includes(u.cityId)) return;
-    if (!groupedByDepartment.has(u.departmentId)) {
-      groupedByDepartment.set(u.departmentId, new Set());
-    }
-    groupedByDepartment.get(u.departmentId).add(u.cityId);
-  });
-
-  for (const [departmentId] of groupedByDepartment) {
-    try {
-      const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
-        params: { departamentoId: departmentId }
-      });
-      const catalog = normalizeCatalog(response.data, { labelKeys: labelKeysCity, idKeys: idKeysCity });
-      if (catalog.length) registerEntries(catalog);
-    } catch (deptError) {
-      console.error(`❌ Ciudades por departamento ${departmentId} falló:`, deptError);
-    }
-  }
-
-  // 3) Fallback: detalle por id
-  const stillMissing = missingIds.filter((id) => !cityCatalog.has(id));
-  for (const id of stillMissing) {
-    try {
-      const detail = await axiosInstance.get(`/api/v1/catalogo/ciudades/${id}`);
-      const payload = Array.isArray(detail.data) ? detail.data : [detail.data];
-      const catalog = normalizeCatalog(payload, { labelKeys: labelKeysCity, idKeys: idKeysCity });
-      registerEntries(catalog);
-    } catch (oneErr) {
-      console.warn(`⚠️ No pude cargar la ciudad ${id} por detalle:`, oneErr);
-    }
-  }
-
-  return cityCatalog;
 };
 
-/* ==================== Estado y derivadas ==================== */
-const users = ref([]);
-const isLoading = ref(false);
-const apiError = ref(null);
-const successMessage = ref(null);
-const currentPage = ref(1);
-const itemsPerPage = 10;
-
-const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / itemsPerPage)));
-const paginatedUsers = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage;
-  const end = start + itemsPerPage;
-  return users.value.slice(start, end);
-});
-
-const rangeStart = computed(() => users.value.length === 0 ? 0 : (currentPage.value - 1) * itemsPerPage + 1);
-const rangeEnd = computed(() => Math.min(currentPage.value * itemsPerPage, users.value.length));
-
-const totalUsers = computed(() => users.value.length);
-const verifiedUsers = computed(() =>
-  users.value.filter(u => u.emailConfirmed && u.mobileNumberConfirmed).length
-);
-const partialUsers = computed(() =>
-  users.value.filter(u =>
-    (u.emailConfirmed && !u.mobileNumberConfirmed) ||
-    (!u.emailConfirmed && u.mobileNumberConfirmed)
-  ).length
-);
-const pendingUsers = computed(() =>
-  users.value.filter(u => !u.emailConfirmed && !u.mobileNumberConfirmed).length
-);
-const verifiedRate = computed(() => totalUsers.value === 0 ? 0 : Math.round((verifiedUsers.value / totalUsers.value) * 100));
-
-/* ==================== Navegación y helpers UI ==================== */
-const logout = () => {
-  auth0Logout({ logoutParams: { returnTo: window.location.origin } });
-};
-const goToRegister = () => router.push({ name: 'register' });
-const formatNames = (u) => [u.firstName, u.secondName].filter(Boolean).join(' ') || 'N/A';
-const formatSurnames = (u) => [u.firstSurname, u.secondSurname].filter(Boolean).join(' ') || 'N/A';
-
-const getStatusText = (u) => {
-  if (u.emailConfirmed && u.mobileNumberConfirmed) return '✓ Autenticado';
-  if (u.emailConfirmed || u.mobileNumberConfirmed) return '⚠ Verificación parcial';
-  return '✗ Pendiente';
-};
-const getStatusClass = (u) => {
-  if (u.emailConfirmed && u.mobileNumberConfirmed) return 'status-badge authenticated';
-  if (u.emailConfirmed || u.mobileNumberConfirmed) return 'status-badge partial';
-  return 'status-badge pending';
-};
-const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
-const previousPage = () => { if (currentPage.value > 1) currentPage.value--; };
-
-/* ==================== Normalización de usuarios ==================== */
-const pickTextValue = (source, keys = []) => {
-  for (const key of keys) {
-    const segs = key.split('.');
-    let cur = source;
-    for (const s of segs) { if (cur == null) break; cur = cur?.[s]; }
-    const val = toDisplayString(cur);
-    if (val) return val;
-  }
-  return null;
-};
-
-const resolveIdValue = (value) => {
-  if (value === undefined || value === null || value === '') return null;
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number') return String(value);
-  if (typeof value === 'object') return pickIdValue(value);
-  return null;
-};
-
-const pickIdFromPaths = (source, paths = []) => {
-  for (const path of paths) {
-    const segs = path.split('.');
-    let cur = source;
-    for (const s of segs) { if (cur == null) break; cur = cur?.[s]; }
-    const val = resolveIdValue(cur);
-    if (val) return val;
-  }
-  return null;
-};
-
-const normalizeUserData = (raw) => {
-  const emailConfirmed = raw.emailConfirmed ?? raw.emailConfirmado ?? raw.email_confirmation ?? false;
-  const mobileNumberConfirmed = raw.mobileNumberConfirmed ?? raw.telefonoMovilConfirmado ?? raw.mobile_number_confirmed ?? false;
-
-  const idTypeId = pickIdFromPaths(raw, ['idTypeId','idType','tipoIdentificacionId','tipoIdentificacion']) || null;
-  const cityId = pickIdFromPaths(raw, [
-    'homeCityId','homeCity','ciudadResidenciaId','ciudadResidencia','cityId','homeCity.cityId'
-  ]) || null;
-  const departmentId = pickIdFromPaths(raw, [
-    'departmentId','department','departamentoId','departamento','homeDepartmentId','homeDepartment',
-    'homeCity.departamento','homeCity.department'
-  ]) || null;
-  const countryId = pickIdFromPaths(raw, [
-    'countryId','country','paisId','pais','homeCountryId','homeCountry',
-    'homeCity.departamento.pais','homeCity.department.country'
-  ]) || null;
-
-  const idTypeName = pickTextValue(raw, [
-    'idTypeName','tipoIdentificacionNombre','tipoDocumento','tipoIdentificacion','idType'
-  ]) || 'N/A';
-
-  const cityName = pickTextValue(raw, [
-    'homeCityName','ciudadResidenciaNombre','ciudadResidencia','cityName','homeCity'
-  ]) || 'N/A';
-
-  const departmentName = pickTextValue(raw, [
-    'homeDepartmentName','departamentoResidencia','departmentName','homeCity.departamento','homeCity.department'
-  ]) || null;
-
-  return {
-    id: raw.id,
-    idTypeId, idTypeName,
-    idNumber: raw.idNumber ?? raw.numeroIdentificacion ?? null,
-    firstName: raw.firstName ?? raw.primerNombre ?? null,
-    secondName: raw.secondName ?? raw.segundoNombre ?? null,
-    firstSurname: raw.firstSurname ?? raw.primerApellido ?? null,
-    secondSurname: raw.secondSurname ?? raw.segundoApellido ?? null,
-    cityId, cityName,
-    departmentId, departmentName,
-    countryId,
-    email: raw.email ?? '—',
-    mobileNumber: raw.mobileNumber ?? raw.telefonoMovil ?? null,
-    emailConfirmed, mobileNumberConfirmed
-  };
-};
-
-/* ==================== Carga y enriquecimiento ==================== */
-const populateCatalogData = async (list) => {
-  const needsIdTypeLabel = (u) =>
-    (!u.idTypeName || u.idTypeName === 'N/A' || u.idTypeName === u.idTypeId || isLikelyId(u.idTypeName));
-  const needsCityLabel = (u) =>
-    (!u.cityName || u.cityName === 'N/A' || u.cityName === u.cityId || isLikelyId(u.cityName));
-
-  // Tipos de identificación
-  const missingIdTypeIds = [...new Set(list.filter(u => needsIdTypeLabel(u) && u.idTypeId).map(u => u.idTypeId))];
-  if (missingIdTypeIds.length) {
-    await ensureIdentificationTypesCatalog();
-    list.forEach((u) => {
-      if (needsIdTypeLabel(u) && u.idTypeId) {
-        const entry = idTypeCatalog.get(u.idTypeId);
-        if (entry?.label) u.idTypeName = entry.label;
-      }
-    });
-  }
-
-  // Ciudades
-  const missingCityIds = [...new Set(list.filter(u => needsCityLabel(u) && u.cityId).map(u => u.cityId))];
-  if (missingCityIds.length) {
-    await ensureCitiesCatalog(missingCityIds, list);
-    list.forEach((u) => {
-      if (needsCityLabel(u) && u.cityId) {
-        const entry = cityCatalog.get(u.cityId);
-        if (entry?.label) u.cityName = entry.label;
-        const dept = entry?.department ?? pickValueForDepartment(entry?.raw);
-        if (dept) {
-          u.departmentId = u.departmentId || dept.id;
-          if (!u.departmentName || u.departmentName === 'N/A') u.departmentName = dept.label;
-        }
-      }
-    });
-  }
-
-  // Fallbacks visuales (no mostrar UUIDs)
-  list.forEach((u) => {
-    if (!u.idTypeName || u.idTypeName === 'N/A' || isLikelyId(u.idTypeName)) u.idTypeName = '—';
-    if (!u.cityName || u.cityName === 'N/A' || isLikelyId(u.cityName)) u.cityName = '—';
-    if (!u.departmentName || u.departmentName === 'N/A') u.departmentName = u.departmentId || null;
-  });
-};
-
-const fetchData = async () => {
-  isLoading.value = true;
-  apiError.value = null;
-  successMessage.value = null;
+// Cargar departamentos
+const loadDepartments = async (countryId) => {
+  // Limpiar selecciones dependientes
+  departamentos.value = [];
+  formData.value.department = '';
+  ciudades.value = [];
+  formData.value.homeCity = '';
+  
+  if (!countryId) return;
 
   try {
-    const response = await axiosInstance.get('/api/v1/usuarios');
-    const rawUsers = Array.isArray(response.data) ? response.data : [];
-    users.value = rawUsers.map(normalizeUserData);
-    await populateCatalogData(users.value);
-    if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+    const response = await axiosInstance.get('/api/v1/catalogo/departamentos', { params: { paisId: countryId }});
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'departamento'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    departamentos.value = catalog;
+    if (errorMessage.value.startsWith('No se pudieron cargar los departamentos')) {
+      errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de departamentos vacío o con formato desconocido:', response.data);
+    }
   } catch (error) {
-    apiError.value = error.response ? `Error ${error.response.status}` : 'Error de conexión';
+    console.error('❌ Error al cargar departamentos:', error);
+    departamentos.value = [];
+    errorMessage.value = 'No se pudieron cargar los departamentos. Intenta nuevamente.';
+  }
+};
+
+// Cargar ciudades (depende del departamento)
+const loadCities = async (departmentId) => {
+  // Limpiar selección dependiente
+  ciudades.value = [];
+  formData.value.homeCity = '';
+
+  if (!departmentId) return;
+
+  try {
+    const response = await axiosInstance.get('/api/v1/catalogo/ciudades', { params: { departamentoId: departmentId }});
+    const catalog = normalizeCatalog(response.data, {
+      labelKeys: ['nombre', 'descripcion', 'name', 'ciudad'],
+      idKeys: ['id', 'uuid', 'codigo', 'code']
+    });
+    ciudades.value = catalog;
+    if (errorMessage.value.startsWith('No se pudieron cargar las ciudades')) {
+      errorMessage.value = '';
+    }
+    if (!catalog.length) {
+      console.warn('⚠️ Catálogo de ciudades vacío o con formato desconocido:', response.data);
+    }
+  } catch (error) {
+    console.error('❌ Error al cargar ciudades:', error);
+    ciudades.value = [];
+    errorMessage.value = 'No se pudieron cargar las ciudades. Intenta nuevamente.';
+  }
+};
+
+const handleSubmit = async () => {
+  isSubmitting.value = true;
+  successMessage.value = '';
+  errorMessage.value = '';
+
+  try {
+    // Se envían los identificadores seleccionados para compatibilidad con las versiones vieja y nueva del API.
+    const payload = {
+      idType: formData.value.idType,
+      idNumber: formData.value.idNumber,
+      firstName: formData.value.firstName,
+      secondName: formData.value.secondName || null,
+      firstSurname: formData.value.firstSurname,
+      secondSurname: formData.value.secondSurname || null,
+      country: formData.value.country || null, // compatibilidad legado
+      countryId: formData.value.country || null,
+      department: formData.value.department || null, // compatibilidad legado
+      departmentId: formData.value.department || null,
+      homeCity: formData.value.homeCity, // UUID de la ciudad (legado)
+      homeCityId: formData.value.homeCity,
+      cityId: formData.value.homeCity,
+      email: formData.value.email,
+      mobileNumber: formData.value.mobileNumber || null
+    };
+
+    console.log('📤 Enviando payload:', payload);
+    
+    const response = await axiosInstance.post('/api/v1/usuarios', payload);
+    
+    successMessage.value = '✅ Usuario registrado exitosamente';
+    
+    // Redirigir al dashboard después de 2 segundos
+    setTimeout(() => {
+      router.push({ name: 'dashboard' });
+    }, 2000);
+    
+  } catch (error) {
+    console.error('❌ Error al registrar usuario:', error);
+    
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+      
+      if (status === 400) {
+        errorMessage.value = `Datos inválidos: ${data.message || 'Verifica los campos'}`;
+      } else if (status === 409) {
+        errorMessage.value = 'El email o número de identificación ya está registrado';
+      } else {
+        errorMessage.value = `Error ${status}: ${data.message || 'No se pudo registrar'}`;
+      }
+    } else {
+      errorMessage.value = 'Error de conexión. Verifica que el backend esté corriendo.';
+    }
   } finally {
-    isLoading.value = false;
+    isSubmitting.value = false;
   }
 };
 
-/* ==================== Acciones ==================== */
-const confirmEmail = async (userId) => {
-  try {
-    await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-email`);
-    successMessage.value = 'Email confirmado exitosamente';
-    const u = users.value.find(x => x.id === userId);
-    if (u) u.emailConfirmed = true;
-    setTimeout(() => successMessage.value = null, 3000);
-  } catch {
-    apiError.value = 'Error al confirmar email';
-  }
+const resetForm = () => {
+  formData.value = {
+    idType: '',
+    idNumber: '',
+    firstName: '',
+    secondName: '',
+    firstSurname: '',
+    secondSurname: '',
+    country: '', 
+    department: '', 
+    homeCity: '',
+    email: '',
+    mobileNumber: ''
+  };
+  departamentos.value = []; 
+  ciudades.value = []; 
+  successMessage.value = '';
+  errorMessage.value = '';
 };
 
-const confirmPhone = async (userId) => {
-  try {
-    await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-phone`);
-    successMessage.value = 'Teléfono confirmado exitosamente';
-    const u = users.value.find(x => x.id === userId);
-    if (u) u.mobileNumberConfirmed = true;
-    setTimeout(() => successMessage.value = null, 3000);
-  } catch {
-    apiError.value = 'Error al confirmar teléfono';
-  }
-};
-
-/* ==================== Montaje ==================== */
-onMounted(async () => {
-  try {
-    const token = await getAccessTokenSilently({
-      authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE }
-    });
-    console.log('🔐 Access Token:', token);
-    console.log('👤 User:', user.value);
-    console.log('✅ isAuthenticated:', isAuthenticated.value);
-    await fetchData();
-  } catch (error) {
-    console.error('Error obteniendo token en dashboard:', error);
-  }
+// Cargar catálogos iniciales al montar el componente
+onMounted(() => {
+  loadIdentificationTypes();
+  loadCountries(); 
 });
 </script>
 
 <style scoped>
-.dashboard-shell {
+.register-page {
   position: relative;
-  padding: 3rem 1.5rem 4rem;
+  min-height: 100vh;
+  padding: 70px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top left, rgba(32, 94, 67, 0.45), transparent 55%),
+    radial-gradient(circle at bottom right, rgba(11, 34, 24, 0.7), rgba(5, 13, 10, 0.95));
+  overflow: hidden;
+}
+
+.ambient-light {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  filter: blur(110px);
+  opacity: 0.6;
+  animation: pulse 10s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+.ambient-light--primary {
+  background: #0f766e;
+  top: -120px;
+  left: -150px;
+}
+
+.ambient-light--secondary {
+  background: #6366f1;
+  bottom: -140px;
+  right: -120px;
+  animation-delay: 2.5s;
+}
+
+@keyframes pulse {
+  from {
+    transform: scale(1) translateY(0px);
+  }
+  to {
+    transform: scale(1.1) translateY(-20px);
+  }
+}
+
+.register-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 48px;
   max-width: 1180px;
-  margin: 0 auto;
+  width: 100%;
+  backdrop-filter: blur(8px);
+}
+
+.register-hero {
+  padding: 48px;
+  border-radius: 28px;
+  background: linear-gradient(200deg, rgba(30, 64, 55, 0.9), rgba(17, 24, 39, 0.85));
+  color: #f0fdf4;
+  box-shadow: 0 24px 60px rgba(15, 118, 110, 0.25);
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  justify-content: center;
+  gap: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
 }
-.background-visuals {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 55%),
-    radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.06), transparent 50%);
+
+.register-hero h1 {
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 700;
 }
-.orb { position: absolute; border-radius: 50%; filter: blur(0.5px); opacity: 0.7; }
-.orb-one { width: 420px; height: 420px; top: -160px; right: -120px; background: radial-gradient(circle, rgba(79, 70, 229, 0.18), transparent 70%); }
-.orb-two { width: 340px; height: 340px; bottom: -120px; left: -80px; background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 70%); animation: breathe 16s ease-in-out infinite; }
-@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
-.dashboard-hero { background: rgba(255, 255, 255, 0.88); border-radius: 24px; padding: 2.5rem; display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 2.5rem; box-shadow: 0 30px 80px -40px rgba(15,42,90,0.35); border: 1px solid rgba(255,255,255,0.55); backdrop-filter: blur(12px); }
-.hero-copy { display: flex; flex-direction: column; gap: 1rem; }
-.eyebrow { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.24em; color: #7c3aed; font-weight: 700; margin: 0; }
-.dashboard-hero h1 { margin: 0; font-size: clamp(2rem, 3.5vw, 2.6rem); color: #15294a; line-height: 1.2; }
-.dashboard-hero p { margin: 0; color: #4f5b72; line-height: 1.6; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.5rem; }
-.btn { border: none; border-radius: 999px; padding: 0.75rem 1.4rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
-.btn:hover { transform: translateY(-1px); }
-.btn-primary { background: linear-gradient(120deg, #7c3aed, #4f46e5); color: #fff; box-shadow: 0 16px 36px -22px rgba(76, 29, 149, 0.65); }
-.btn-primary:hover { box-shadow: 0 20px 45px -20px rgba(79, 70, 229, 0.6); }
-.btn-ghost { background: rgba(79,70,229,0.08); color: #4f46e5; }
-.btn-ghost:hover { background: rgba(79,70,229,0.12); }
-.hero-summary { display: grid; gap: 1rem; align-content: start; }
-.summary-card { background: rgba(255,255,255,0.9); border-radius: 18px; padding: 1.5rem; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 15px 40px -30px rgba(15,42,90,0.4); }
-.summary-label { margin: 0; font-size: 0.85rem; text-transform: uppercase; color: #6b7b95; letter-spacing: 0.12em; }
-.summary-value { margin: 0.35rem 0 0; font-size: 2.1rem; font-weight: 700; color: #15294a; }
-.summary-value.positive { color: #059669; }
-.summary-value.warning { color: #d97706; }
-.summary-foot { display: block; margin-top: 0.35rem; font-size: 0.85rem; color: #6b7b95; }
-.state-card { background: rgba(255,255,255,0.85); border-radius: 20px; padding: 2rem; display: flex; align-items: center; justify-content: center; gap: 1rem; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 20px 60px -40px rgba(15,42,90,0.4); backdrop-filter: blur(8px); text-align: center; flex-direction: column; }
-.state-card.error { color: #b91c1c; }
-.state-card.empty h2 { margin: 0; color: #15294a; }
-.state-card.empty p { margin: 0 0 1rem; color: #4f5b72; }
-.spinner { width: 2rem; height: 2rem; border-radius: 50%; border: 3px solid rgba(79,70,229,0.2); border-top-color: #4f46e5; animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.data-section { background: rgba(255,255,255,0.9); border-radius: 26px; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 24px 60px -38px rgba(15,42,90,0.35); overflow: hidden; }
-.data-header { padding: 2rem 2.2rem 1.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; }
-.data-header h2 { margin: 0; color: #15294a; font-size: 1.5rem; }
-.data-header p { margin: 0.35rem 0 0; color: #6b7b95; }
-.table-wrapper { overflow-x: auto; }
-.table-wrapper table { width: 100%; border-collapse: collapse; min-width: 960px; }
-th { text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.12em; color: #7c8ba7; padding: 0 2.2rem 1rem; }
-td { padding: 1.25rem 2.2rem; border-top: 1px solid rgba(21,41,74,0.06); color: #2f3e57; vertical-align: top; }
-.name-cell .primary { margin: 0; font-weight: 600; color: #15294a; }
-.primary { margin: 0; font-weight: 500; }
-.secondary { margin: 0.2rem 0 0; color: #6b7b95; font-size: 0.9rem; }
-.chip { display: inline-flex; align-items: center; border-radius: 999px; background: rgba(79,70,229,0.1); color: #4f46e5; padding: 0.2rem 0.6rem; font-size: 0.8rem; margin-right: 0.45rem; }
-.status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
-.status-badge.authenticated { background: rgba(16,185,129,0.12); color: #047857; }
-.status-badge.partial { background: rgba(234,179,8,0.14); color: #92400e; }
-.status-badge.pending { background: rgba(239,68,68,0.12); color: #b91c1c; }
-.actions { display: flex; flex-direction: column; gap: 0.45rem; }
-.btn-action { border: none; border-radius: 0.75rem; padding: 0.55rem 0.95rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s ease, transform 0.2s ease; text-align: left; }
-.btn-action:hover { transform: translateY(-1px); }
-.btn-action:disabled { cursor: not-allowed; opacity: 0.6; transform: none; }
-.btn-action:disabled:hover { background: inherit; transform: none; }
-.btn-action.email { background: rgba(59,130,246,0.12); color: #1d4ed8; }
-.btn-action.email:hover { background: rgba(59,130,246,0.18); }
-.btn-action.phone { background: rgba(244,114,182,0.12); color: #be185d; }
-.btn-action.phone:hover { background: rgba(244,114,182,0.18); }
-.pagination { padding: 1.5rem 2.2rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: rgba(248,250,252,0.6); }
-.page-info { font-size: 0.95rem; color: #4f5b72; }
-.range { color: #7c8ba7; font-size: 0.85rem; margin-left: 0.4rem; }
-.btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-.toast-enter-active, .toast-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-10px); }
-.toast { position: fixed; top: 20px; right: 20px; background: rgba(16,185,129,0.95); color: #ecfdf5; padding: 1rem 1.4rem; border-radius: 16px; box-shadow: 0 18px 38px -22px rgba(16,185,129,0.55); z-index: 20; font-weight: 600; }
-@media (max-width: 1024px) {
-  .dashboard-hero { grid-template-columns: 1fr; }
-  .hero-summary { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); display: grid; }
+
+.register-hero p {
+  color: #cbd5f5;
+  font-size: 16px;
+  line-height: 1.6;
+  margin: 0;
 }
-@media (max-width: 720px) {
-  .dashboard-shell { padding: 2.5rem 1.2rem 3rem; }
-  .data-header { padding: 1.6rem 1.5rem 1.2rem; }
-  th, td { padding-left: 1.5rem; padding-right: 1.5rem; }
-  .pagination { padding: 1.4rem 1.5rem 1.6rem; }
+
+.hero-highlights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
-@media (max-width: 600px) {
-  .table-wrapper table { min-width: 720px; }
-  .dashboard-hero { padding: 2rem; }
+
+.hero-highlights li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.35);
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.hero-highlights .icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.register-container {
+  background: rgba(10, 14, 12, 0.85);
+  padding: 42px 44px;
+  border-radius: 26px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(30, 64, 55, 0.35);
+  color: #e8f0e6;
+  transition: transform 0.5s ease, box-shadow 0.5s ease;
+}
+
+.register-container:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 32px 90px rgba(15, 118, 110, 0.25);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+  gap: 18px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(45, 212, 191, 0.18);
+  color: #5eead4;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.header h2 {
+  font-size: 30px;
+  font-weight: 700;
+  color: #a3e635;
+  margin: 12px 0 6px;
+  letter-spacing: 0.4px;
+}
+
+.subheading {
+  margin: 0;
+  color: #cdd5cc;
+  font-size: 15px;
+}
+
+.btn-back {
+  padding: 12px 20px;
+  background: linear-gradient(120deg, rgba(56, 189, 248, 0.25), rgba(129, 140, 248, 0.35));
+  color: #e0f2fe;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.btn-back:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(56, 189, 248, 0.25);
+}
+
+.register-form {
+  background: rgba(17, 24, 39, 0.6);
+  padding: 32px;
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  animation: fadeIn 0.6s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.location-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: #a5d6a7;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select {
+  padding: 12px 14px;
+  border: 1.5px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  background: rgba(15, 23, 42, 0.65);
+  color: #f1f5f9;
+}
+
+.form-group input::placeholder {
+  color: rgba(226, 232, 240, 0.45);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #34d399;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.18);
+}
+
+.form-group select:disabled {
+  background: rgba(15, 23, 42, 0.4);
+  color: rgba(148, 163, 184, 0.4);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.form-group select option,
+.form-group select optgroup {
+  background: #0f172a;   /* fondo oscuro */
+  color: #a7f3d0;        /* texto verde menta */
+}
+
+.form-group select:focus option:checked {
+  background-color: #22c55e; /* verde seleccionado */
+  color: #ffffff;
+}
+
+.form-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 32px;
+  flex-wrap: wrap;
+}
+
+.btn-submit,
+.btn-reset {
+  flex: 1;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+}
+
+.btn-submit {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #f8fafc;
+}
+
+.btn-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 35px rgba(34, 197, 94, 0.35);
+}
+
+.btn-submit:disabled {
+  background: rgba(38, 38, 38, 0.5);
+  cursor: not-allowed;
+  color: rgba(226, 232, 240, 0.45);
+  box-shadow: none;
+}
+
+.btn-reset {
+  background: linear-gradient(135deg, rgba(248, 113, 113, 0.9), rgba(239, 68, 68, 0.9));
+  color: #fff5f5;
+}
+
+.btn-reset:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 35px rgba(248, 113, 113, 0.35);
+}
+
+.message {
+  margin-top: 24px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  font-weight: 600;
+  animation: fadeIn 0.4s ease;
+}
+
+.message.success {
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+  border: 1px solid rgba(134, 239, 172, 0.4);
+}
+
+.message.error {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+@media (max-width: 1100px) {
+  .register-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .register-hero {
+    order: 2;
+  }
+
+  .register-container {
+    order: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .location-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .register-page {
+    padding: 48px 18px;
+  }
+
+  .register-hero {
+    padding: 32px;
+  }
+
+  .register-container {
+    padding: 32px 26px;
+  }
+
+  .register-form {
+    padding: 26px 22px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .register-page {
+    padding: 32px 14px;
+  }
+
+  .register-hero h1 {
+    font-size: 28px;
+  }
+
+  .register-container {
+    padding: 26px 20px;
+  }
+
+  /* ==== FIX VISIBILIDAD DE OPCIONES EN SELECT ==== */
+
+/* fuerza esquema claro en el menú nativo */
+.form-group select {
+  background-color: #ffffff !important;
+  color: #0f172a !important; /* texto oscuro */
+  color-scheme: light; /* usa menú claro del sistema */
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* estilos del popup (opciones desplegadas) */
+.form-group select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* color de la opción seleccionada */
+.form-group select:focus option:checked {
+  background-color: #22c55e !important;
+  color: #ffffff !important;
+}
+
+/* fallback: Windows oscuro + Chrome */
+@media (prefers-color-scheme: dark) {
+  select,
+  option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
+
 }
 </style>
