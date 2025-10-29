@@ -259,18 +259,44 @@ const pickIdValue = (source, keys = []) => {
 };
 
 const unwrapCollection = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (payload && typeof payload === 'object') {
-    const candidateKeys = ['data', 'content', 'results', 'items', 'value', 'values'];
-    for (const key of candidateKeys) {
-      if (Array.isArray(payload?.[key])) return payload[key];
+  const seen = new WeakSet();
+
+  const visit = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === 'object') {
+      if (seen.has(value)) return [];
+      seen.add(value);
+
+      const candidateKeys = [
+        'data', 'datos', 'content', 'results', 'result', 'items', 'item',
+        'value', 'values', 'records', 'rows', 'collection', 'entries', 'lista', 'list',
+        'usuarios', 'users'
+      ];
+
+      for (const key of candidateKeys) {
+        const candidate = value?.[key];
+        if (Array.isArray(candidate)) return candidate;
+        if (candidate && typeof candidate === 'object') {
+          const nested = visit(candidate);
+          if (nested.length) return nested;
+        }
+      }
+
+      for (const nestedValue of Object.values(value)) {
+        const resolved = visit(nestedValue);
+        if (resolved.length) return resolved;
+      }
     }
-  }
-  return [];
+    return [];
+  };
+
+  return visit(payload);
 };
 
 const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
-  const collection = unwrapCollection(payload);
+  const collection = unwrapCollection(payload) || [];
   return collection
     .map((entry) => {
       const id = pickIdValue(entry, [...idKeys, ...defaultIdKeys]);
@@ -286,6 +312,81 @@ const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
       };
     })
     .filter(Boolean);
+};
+
+const pickValueForDepartment = (rawCity) => {
+  if (!rawCity || typeof rawCity !== 'object') return null;
+
+  const departmentId = pickIdValue(rawCity, ['departamentoId', 'departmentId', 'departamento.id', 'departamento']);
+  if (!departmentId) return null;
+
+  const departmentLabel =
+    pickTextValue(rawCity, ['departamentoNombre', 'departmentName', 'departamento']) || departmentId;
+
+  const departmentRaw = rawCity.departamento || rawCity.department || rawCity;
+
+  return {
+    id: departmentId,
+    label: departmentLabel,
+    raw: departmentRaw
+  };
+};
+
+const deriveCityLabelFromUser = (user) =>
+  pickTextValue(user?.raw ?? user, [
+    'homeCityName',
+    'ciudadResidenciaNombre',
+    'ciudadResidencia',
+    'cityName',
+    'ciudadNombre',
+    'ciudadDescripcion',
+    'homeCity.nombre',
+    'homeCity.name',
+    'homeCity.descripcion',
+    'homeCity.label',
+    'ciudad',
+    'city'
+  ]);
+
+const deriveDepartmentFromUser = (user) => {
+  const rawSource = user?.raw ?? user;
+  const departmentFromCity = pickValueForDepartment(rawSource?.homeCity || rawSource?.ciudadResidencia);
+  if (departmentFromCity) return departmentFromCity;
+
+  const departmentId =
+    pickIdValue(rawSource, [
+      'departmentId',
+      'departamentoId',
+      'departamento.id',
+      'departamento',
+      'homeCity.departamento',
+      'homeCity.department'
+    ]) || user?.departmentId || null;
+
+  if (!departmentId) return null;
+
+  const departmentLabel =
+    pickTextValue(rawSource, [
+      'homeDepartmentName',
+      'departamentoResidencia',
+      'departmentName',
+      'departamento',
+      'department',
+      'homeCity.departmentName'
+    ]) || user?.departmentName || departmentId;
+
+  const departmentRaw =
+    rawSource?.departamento ||
+    rawSource?.department ||
+    rawSource?.homeCity?.departamento ||
+    rawSource?.homeCity?.department ||
+    null;
+
+  return {
+    id: departmentId,
+    label: departmentLabel,
+    raw: departmentRaw
+  };
 };
 
 const idTypeCatalog = new Map();
@@ -310,7 +411,7 @@ const ensureIdentificationTypesCatalog = async () => {
 };
 
 const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
-  const missingIds = cityIds.filter((id) => id && !cityCatalog.has(id));
+  let missingIds = cityIds.filter((id) => id && !cityCatalog.has(id));
   if (!missingIds.length) return cityCatalog;
 
   const registerEntries = (entries) => {
@@ -324,64 +425,79 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
     });
   };
 
-  try {
-    const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
-      params: { ids: missingIds.join(',') }
-    });
-    const catalog = normalizeCatalog(response.data, {
-      // Variantes de nombre comunes
-      labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
-      idKeys: ['id', 'uuid', 'codigo', 'code']
-    });
-    registerEntries(catalog);
-  } catch (error) {
-    console.warn('⚠️ No se pudieron cargar las ciudades por IDs, intentando por departamentos.', error);
+  const tryFetchCatalog = async (params) => {
+    try {
+      const response = await axiosInstance.get('/api/v1/catalogo/ciudades', { params });
+      const catalog = normalizeCatalog(response.data, {
+        labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
+        idKeys: ['id', 'uuid', 'codigo', 'code']
+      });
+      registerEntries(catalog);
+    } catch (error) {
+      throw error;
+    }
+  };
 
-    const groupedByDepartment = new Map();
-    usersContext.forEach((user) => {
-      if (!user.departmentId) return;
-      if (!missingIds.includes(user.cityId)) return;
-      if (!groupedByDepartment.has(user.departmentId)) {
-        groupedByDepartment.set(user.departmentId, new Set());
-      }
-      groupedByDepartment.get(user.departmentId).add(user.cityId);
-    });
+  // 1) Agrupar por departamento (si se puede inferir desde los usuarios)
+  const groupedByDepartment = new Map();
+  usersContext.forEach((user) => {
+    if (!user || !missingIds.includes(user.cityId)) return;
+    const departmentData = deriveDepartmentFromUser(user);
+    const departmentId = departmentData?.id;
+    if (!departmentId) return;
+    if (!groupedByDepartment.has(departmentId)) {
+      groupedByDepartment.set(departmentId, new Set());
+    }
+    groupedByDepartment.get(departmentId).add(user.cityId);
+  });
 
-    for (const [departmentId] of groupedByDepartment) {
-      try {
-        const response = await axiosInstance.get('/api/v1/catalogo/ciudades', {
-          params: { departamentoId }
-        });
-        const catalog = normalizeCatalog(response.data, {
-          labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
-          idKeys: ['id', 'uuid', 'codigo', 'code']
-        });
-        registerEntries(catalog);
-      } catch (deptError) {
-        console.error(`❌ Error al cargar ciudades para el departamento ${departmentId}:`, deptError);
-      }
+  for (const [departmentId] of groupedByDepartment) {
+    try {
+      await tryFetchCatalog({ departamentoId: departmentId });
+    } catch (deptError) {
+      console.error(`❌ Error al cargar ciudades para el departamento ${departmentId}:`, deptError);
     }
   }
 
+  // Recalcular faltantes
+  missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
+  if (!missingIds.length) return cityCatalog;
+
+  // 2) Intentar por los IDs proporcionados, probando diferentes nombres de parámetro
+  const paramVariants = [
+    { key: 'ids', value: missingIds.join(',') },
+    { key: 'id', value: missingIds.join(',') },
+    { key: 'ciudadId', value: missingIds.join(',') }
+  ];
+
+  for (const variant of paramVariants) {
+    try {
+      await tryFetchCatalog({ [variant.key]: variant.value });
+    } catch (error) {
+      console.warn(`⚠️ No se pudieron cargar ciudades usando el parámetro "${variant.key}".`, error);
+    }
+    missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
+    if (!missingIds.length) break;
+  }
+
+  // 3) Fallback: aprovechar la información almacenada en el usuario crudo
+  if (missingIds.length) {
+    usersContext.forEach((user) => {
+      if (!user || !missingIds.includes(user.cityId)) return;
+      const label = deriveCityLabelFromUser(user);
+      if (!label) return;
+      const departmentData = deriveDepartmentFromUser(user);
+
+      cityCatalog.set(user.cityId, {
+        id: user.cityId,
+        label,
+        raw: user.raw?.homeCity || null,
+        department: departmentData
+      });
+    });
+  }
+
   return cityCatalog;
-};
-
-const pickValueForDepartment = (rawCity) => {
-  if (!rawCity || typeof rawCity !== 'object') return null;
-
-  const departmentId = pickIdValue(rawCity, ['departamentoId', 'departmentId', 'departamento.id', 'departamento']);
-  if (!departmentId) return null;
-
-  const departmentLabel =
-    pickTextValue(rawCity, ['departamentoNombre', 'departmentName', 'departamento']) || departmentId;
-
-  const departmentRaw = rawCity.departamento || rawCity.department || rawCity;
-
-  return {
-    id: departmentId,
-    label: departmentLabel,
-    raw: departmentRaw
-  };
 };
 
 const populateCatalogData = async (userList) => {
@@ -442,11 +558,29 @@ const populateCatalogData = async (userList) => {
     if (!user.idTypeName || user.idTypeName === 'N/A' || isLikelyId(user.idTypeName)) {
       user.idTypeName = '—';
     }
+
+    if (needsCityLabel(user)) {
+      const fallbackCity = deriveCityLabelFromUser(user);
+      if (fallbackCity && !isLikelyId(fallbackCity)) {
+        user.cityName = fallbackCity;
+      }
+    }
+
     if (!user.cityName || user.cityName === 'N/A' || isLikelyId(user.cityName)) {
       user.cityName = '—';
     }
+
+    const departmentData = deriveDepartmentFromUser(user);
+    if (departmentData?.id && !user.departmentId) {
+      user.departmentId = departmentData.id;
+    }
+
     if (!user.departmentName || user.departmentName === 'N/A') {
-      user.departmentName = user.departmentId || null;
+      if (departmentData?.label) {
+        user.departmentName = departmentData.label;
+      } else {
+        user.departmentName = user.departmentId || null;
+      }
     }
   });
 };
@@ -532,7 +666,9 @@ const normalizeUserData = (rawUser) => {
       'ciudadResidenciaId',
       'ciudadResidencia',
       'cityId',
-      'homeCity.cityId'
+      'homeCity.cityId',
+      'ciudadId',
+      'ciudad.id'
     ]) || null;
 
   const departmentId =
@@ -574,7 +710,12 @@ const normalizeUserData = (rawUser) => {
       'ciudadResidenciaNombre',
       'ciudadResidencia',
       'cityName',
-      'homeCity'
+      'homeCity',
+      'ciudad',
+      'city',
+      'homeCity.nombre',
+      'homeCity.name',
+      'homeCity.descripcion'
     ]) || 'N/A';
 
   const departmentName =
@@ -583,11 +724,26 @@ const normalizeUserData = (rawUser) => {
       'departamentoResidencia',
       'departmentName',
       'homeCity.departamento',
-      'homeCity.department'
+      'homeCity.department',
+      'departamento',
+      'department',
+      'homeCity.departmentName'
     ]) || null;
 
+  const userId =
+    pickIdValue(rawUser, [
+      'id',
+      'userId',
+      'usuarioId',
+      'idUsuario',
+      'uuid',
+      'codigo',
+      'code',
+      'identifier'
+    ]) || rawUser.idNumber || rawUser.email || null;  
+
   return {
-    id: rawUser.id,
+    id: userId,
     idTypeId,
     idTypeName,
     idNumber: rawUser.idNumber ?? rawUser.numeroIdentificacion ?? null,
@@ -603,7 +759,8 @@ const normalizeUserData = (rawUser) => {
     email: rawUser.email ?? '—',
     mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
     emailConfirmed,
-    mobileNumberConfirmed
+    mobileNumberConfirmed,
+    raw: rawUser
   };
 };
 
@@ -614,8 +771,9 @@ const fetchData = async () => {
 
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
-    const rawUsers = Array.isArray(response.data) ? response.data : [];
+    const rawUsers = unwrapCollection(response.data) || [];
     users.value = rawUsers.map(normalizeUserData);
+    users.value = users.value.filter((user) => !!user.id);
     await populateCatalogData(users.value);
     if (currentPage.value > totalPages.value) {
       currentPage.value = totalPages.value;
@@ -716,86 +874,455 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2rem;
 }
+
 .background-visuals {
   position: fixed;
   inset: 0;
   z-index: -1;
   background: radial-gradient(circle at top right, rgba(79, 70, 229, 0.08), transparent 55%),
-    radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.06), transparent 50%);
+              radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.06), transparent 50%);
 }
-.orb { position: absolute; border-radius: 50%; filter: blur(0.5px); opacity: 0.7; }
-.orb-one { width: 420px; height: 420px; top: -160px; right: -120px; background: radial-gradient(circle, rgba(79, 70, 229, 0.18), transparent 70%); }
-.orb-two { width: 340px; height: 340px; bottom: -120px; left: -80px; background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 70%); animation: breathe 16s ease-in-out infinite; }
-@keyframes breathe { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
-.dashboard-hero { background: rgba(255, 255, 255, 0.88); border-radius: 24px; padding: 2.5rem; display: grid; grid-template-columns: minmax(0,1.35fr) minmax(0,1fr); gap: 2.5rem; box-shadow: 0 30px 80px -40px rgba(15, 42, 90, 0.35); border: 1px solid rgba(255, 255, 255, 0.55); backdrop-filter: blur(12px); }
-.hero-copy { display: flex; flex-direction: column; gap: 1rem; }
-.eyebrow { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.24em; color: #7c3aed; font-weight: 700; margin: 0; }
-.dashboard-hero h1 { margin: 0; font-size: clamp(2rem, 3.5vw, 2.6rem); color: #15294a; line-height: 1.2; }
-.dashboard-hero p { margin: 0; color: #4f5b72; line-height: 1.6; }
-.hero-actions { display: flex; flex-wrap: wrap; gap: 0.85rem; margin-top: 0.5rem; }
-.btn { border: none; border-radius: 999px; padding: 0.75rem 1.4rem; font-weight: 600; font-size: 0.95rem; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
-.btn:hover { transform: translateY(-1px); }
-.btn-primary { background: linear-gradient(120deg, #7c3aed, #4f46e5); color: #fff; box-shadow: 0 16px 36px -22px rgba(76, 29, 149, 0.65); }
-.btn-primary:hover { box-shadow: 0 20px 45px -20px rgba(79, 70, 229, 0.6); }
-.btn-ghost { background: rgba(79,70,229,0.08); color: #4f46e5; }
-.btn-ghost:hover { background: rgba(79,70,229,0.12); }
-.hero-summary { display: grid; gap: 1rem; align-content: start; }
-.summary-card { background: rgba(255,255,255,0.9); border-radius: 18px; padding: 1.5rem; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 15px 40px -30px rgba(15,42,90,0.4); }
-.summary-label { margin: 0; font-size: 0.85rem; text-transform: uppercase; color: #6b7b95; letter-spacing: 0.12em; }
-.summary-value { margin: 0.35rem 0 0; font-size: 2.1rem; font-weight: 700; color: #15294a; }
-.summary-value.positive { color: #059669; }
-.summary-value.warning { color: #d97706; }
-.summary-foot { display: block; margin-top: 0.35rem; font-size: 0.85rem; color: #6b7b95; }
-.state-card { background: rgba(255,255,255,0.85); border-radius: 20px; padding: 2rem; display: flex; align-items: center; justify-content: center; gap: 1rem; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 20px 60px -40px rgba(15,42,90,0.4); backdrop-filter: blur(8px); text-align: center; flex-direction: column; }
-.state-card.error { color: #b91c1c; }
-.state-card.empty h2 { margin: 0; color: #15294a; }
-.state-card.empty p { margin: 0 0 1rem; color: #4f5b72; }
-.spinner { width: 2rem; height: 2rem; border-radius: 50%; border: 3px solid rgba(79,70,229,0.2); border-top-color: #4f46e5; animation: spin 0.9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.data-section { background: rgba(255,255,255,0.9); border-radius: 26px; border: 1px solid rgba(21,41,74,0.08); box-shadow: 0 24px 60px -38px rgba(15,42,90,0.35); overflow: hidden; }
-.data-header { padding: 2rem 2.2rem 1.5rem; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem; }
-.data-header h2 { margin: 0; color: #15294a; font-size: 1.5rem; }
-.data-header p { margin: 0.35rem 0 0; color: #6b7b95; }
-.table-wrapper { overflow-x: auto; }
-.table-wrapper table { width: 100%; border-collapse: collapse; min-width: 960px; }
-th { text-align: left; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.12em; color: #7c8ba7; padding: 0 2.2rem 1rem; }
-td { padding: 1.25rem 2.2rem; border-top: 1px solid rgba(21,41,74,0.06); color: #2f3e57; vertical-align: top; }
-.name-cell .primary { margin: 0; font-weight: 600; color: #15294a; }
-.primary { margin: 0; font-weight: 500; }
-.secondary { margin: 0.2rem 0 0; color: #6b7b95; font-size: 0.9rem; }
-.chip { display: inline-flex; align-items: center; border-radius: 999px; background: rgba(79,70,229,0.1); color: #4f46e5; padding: 0.2rem 0.6rem; font-size: 0.8rem; margin-right: 0.45rem; }
-.status-badge { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
-.status-badge.authenticated { background: rgba(16,185,129,0.12); color: #047857; }
-.status-badge.partial { background: rgba(234,179,8,0.14); color: #92400e; }
-.status-badge.pending { background: rgba(239,68,68,0.12); color: #b91c1c; }
-.actions { display: flex; flex-direction: column; gap: 0.45rem; }
-.btn-action { border: none; border-radius: 0.75rem; padding: 0.55rem 0.95rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: background 0.2s ease, transform 0.2s ease; text-align: left; }
-.btn-action:hover { transform: translateY(-1px); }
-.btn-action:disabled { cursor: not-allowed; opacity: 0.6; transform: none; }
-.btn-action:disabled:hover { background: inherit; transform: none; }
-.btn-action.email { background: rgba(59,130,246,0.12); color: #1d4ed8; }
-.btn-action.email:hover { background: rgba(59,130,246,0.18); }
-.btn-action.phone { background: rgba(244,114,182,0.12); color: #be185d; }
-.btn-action.phone:hover { background: rgba(244,114,182,0.18); }
-.pagination { padding: 1.5rem 2.2rem 2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; background: rgba(248,250,252,0.6); }
-.page-info { font-size: 0.95rem; color: #4f5b72; }
-.range { color: #7c8ba7; font-size: 0.85rem; margin-left: 0.4rem; }
-.btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-.toast-enter-active, .toast-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(-10px); }
-.toast { position: fixed; top: 20px; right: 20px; background: rgba(16,185,129,0.95); color: #ecfdf5; padding: 1rem 1.4rem; border-radius: 16px; box-shadow: 0 18px 38px -22px rgba(16,185,129,0.55); z-index: 20; font-weight: 600; }
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(0.5px);
+  opacity: 0.7;
+}
+
+.orb-one {
+  width: 420px;
+  height: 420px;
+  top: -160px;
+  right: -120px;
+  background: radial-gradient(circle, rgba(79, 70, 229, 0.18), transparent 70%);
+}
+
+.orb-two {
+  width: 340px;
+  height: 340px;
+  bottom: -120px;
+  left: -80px;
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.16), transparent 70%);
+  animation: breathe 16s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.dashboard-hero {
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 24px;
+  padding: 2.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 2.5rem;
+  box-shadow: 0 30px 80px -40px rgba(15, 42, 90, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px);
+}
+
+.hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.eyebrow {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.24em;
+  color: #7c3aed;
+  font-weight: 700;
+  margin: 0;
+}
+
+.dashboard-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3.5vw, 2.6rem);
+  color: #15294a;
+  line-height: 1.2;
+}
+
+.dashboard-hero p {
+  margin: 0;
+  color: #4f5b72;
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.75rem 1.4rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  background: linear-gradient(120deg, #7c3aed, #4f46e5);
+  color: #fff;
+  box-shadow: 0 16px 36px -22px rgba(76, 29, 149, 0.65);
+}
+
+.btn-primary:hover {
+  box-shadow: 0 20px 45px -20px rgba(79, 70, 229, 0.6);
+}
+
+.btn-ghost {
+  background: rgba(79, 70, 229, 0.08);
+  color: #4f46e5;
+}
+
+.btn-ghost:hover {
+  background: rgba(79, 70, 229, 0.12);
+}
+
+.hero-summary {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.summary-card {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  padding: 1.5rem;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 15px 40px -30px rgba(15, 42, 90, 0.4);
+}
+
+.summary-label {
+  margin: 0;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #6b7b95;
+  letter-spacing: 0.12em;
+}
+
+.summary-value {
+  margin: 0.35rem 0 0;
+  font-size: 2.1rem;
+  font-weight: 700;
+  color: #15294a;
+}
+
+.summary-value.positive {
+  color: #059669;
+}
+
+.summary-value.warning {
+  color: #d97706;
+}
+
+.summary-foot {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+  color: #6b7b95;
+}
+
+.state-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 20px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 20px 60px -40px rgba(15, 42, 90, 0.4);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  flex-direction: column;
+}
+
+.state-card.error {
+  color: #b91c1c;
+}
+
+.state-card.empty h2 {
+  margin: 0;
+  color: #15294a;
+}
+
+.state-card.empty p {
+  margin: 0 0 1rem;
+  color: #4f5b72;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 3px solid rgba(79, 70, 229, 0.2);
+  border-top-color: #4f46e5;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.data-section {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 26px;
+  border: 1px solid rgba(21, 41, 74, 0.08);
+  box-shadow: 0 24px 60px -38px rgba(15, 42, 90, 0.35);
+  overflow: hidden;
+}
+
+.data-header {
+  padding: 2rem 2.2rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.data-header h2 {
+  margin: 0;
+  color: #15294a;
+  font-size: 1.5rem;
+}
+
+.data-header p {
+  margin: 0.35rem 0 0;
+  color: #6b7b95;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.table-wrapper table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 960px;
+}
+
+th {
+  text-align: left;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #7c8ba7;
+  padding: 0 2.2rem 1rem;
+}
+
+td {
+  padding: 1.25rem 2.2rem;
+  border-top: 1px solid rgba(21, 41, 74, 0.06);
+  color: #2f3e57;
+  vertical-align: top;
+}
+
+.name-cell .primary {
+  margin: 0;
+  font-weight: 600;
+  color: #15294a;
+}
+
+.primary {
+  margin: 0;
+  font-weight: 500;
+}
+
+.secondary {
+  margin: 0.2rem 0 0;
+  color: #6b7b95;
+  font-size: 0.9rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.1);
+  color: #4f46e5;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  margin-right: 0.45rem;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-badge.authenticated {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+.status-badge.partial {
+  background: rgba(234, 179, 8, 0.14);
+  color: #92400e;
+}
+
+.status-badge.pending {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.btn-action {
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+  text-align: left;
+}
+
+.btn-action:hover {
+  transform: translateY(-1px);
+}
+
+.btn-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
+}
+
+.btn-action:disabled:hover {
+  background: inherit;
+  transform: none;
+}
+
+.btn-action.email {
+  background: rgba(59, 130, 246, 0.12);
+  color: #1d4ed8;
+}
+
+.btn-action.email:hover {
+  background: rgba(59, 130, 246, 0.18);
+}
+
+.btn-action.phone {
+  background: rgba(244, 114, 182, 0.12);
+  color: #be185d;
+}
+
+.btn-action.phone:hover {
+  background: rgba(244, 114, 182, 0.18);
+}
+
+.pagination {
+  padding: 1.5rem 2.2rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: rgba(248, 250, 252, 0.6);
+}
+
+.page-info {
+  font-size: 0.95rem;
+  color: #4f5b72;
+}
+
+.range {
+  color: #7c8ba7;
+  font-size: 0.85rem;
+  margin-left: 0.4rem;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(16, 185, 129, 0.95);
+  color: #ecfdf5;
+  padding: 1rem 1.4rem;
+  border-radius: 16px;
+  box-shadow: 0 18px 38px -22px rgba(16, 185, 129, 0.55);
+  z-index: 20;
+  font-weight: 600;
+}
+
 @media (max-width: 1024px) {
-  .dashboard-hero { grid-template-columns: 1fr; }
-  .hero-summary { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); display: grid; }
+  .dashboard-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-summary {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    display: grid;
+  }
 }
+
 @media (max-width: 720px) {
-  .dashboard-shell { padding: 2.5rem 1.2rem 3rem; }
-  .data-header { padding: 1.6rem 1.5rem 1.2rem; }
-  th, td { padding-left: 1.5rem; padding-right: 1.5rem; }
-  .pagination { padding: 1.4rem 1.5rem 1.6rem; }
+  .dashboard-shell {
+    padding: 2.5rem 1.2rem 3rem;
+  }
+
+  .data-header {
+    padding: 1.6rem 1.5rem 1.2rem;
+  }
+
+  th, td {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .pagination {
+    padding: 1.4rem 1.5rem 1.6rem;
+  }
 }
+
 @media (max-width: 600px) {
-  .table-wrapper table { min-width: 720px; }
-  .dashboard-hero { padding: 2rem; }
+  .table-wrapper table {
+    min-width: 720px;
+  }
+
+  .dashboard-hero {
+    padding: 2rem;
+  }
 }
 </style>
