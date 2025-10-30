@@ -123,17 +123,19 @@
                   @click="confirmEmail(user.id)"
                   class="btn-action email"
                   title="Confirmar email"
-                  :disabled="user.emailConfirmed"
+                  :disabled="user.emailConfirmed || user.confirmingEmail"
                 >
-                  {{ user.emailConfirmed ? 'Email verificado' : 'Confirmar email' }}
+                  <template v-if="user.confirmingEmail">Enviando…</template>
+                  <template v-else>{{ user.emailConfirmed ? 'Email verificado' : 'Confirmar email' }}</template>
                 </button>
                 <button
                   @click="confirmPhone(user.id)"
                   class="btn-action phone"
                   title="Confirmar teléfono"
-                  :disabled="!user.mobileNumber || user.mobileNumberConfirmed"
+                  :disabled="!user.mobileNumber || user.mobileNumberConfirmed || user.confirmingMobile"
                 >
                   <template v-if="!user.mobileNumber">Sin teléfono</template>
+                  <template v-else-if="user.confirmingMobile">Enviando…</template>
                   <template v-else>{{ user.mobileNumberConfirmed ? 'Teléfono verificado' : 'Confirmar teléfono' }}</template>
                 </button>
               </td>
@@ -627,6 +629,11 @@ const verifiedRate = computed(() => {
   return Math.round((verifiedUsers.value / totalUsers.value) * 100);
 });
 
+const clearMessages = () => {
+  apiError.value = null;
+  successMessage.value = null;
+};
+
 const logout = () => {
   auth0Logout({
     logoutParams: {
@@ -740,7 +747,7 @@ const normalizeUserData = (rawUser) => {
       'codigo',
       'code',
       'identifier'
-    ]) || rawUser.idNumber || rawUser.email || null;  
+    ]) || rawUser.idNumber || rawUser.email || null;
 
   return {
     id: userId,
@@ -760,6 +767,8 @@ const normalizeUserData = (rawUser) => {
     mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
     emailConfirmed,
     mobileNumberConfirmed,
+    confirmingEmail: false,
+    confirmingMobile: false,
     raw: rawUser
   };
 };
@@ -772,8 +781,7 @@ const fetchData = async () => {
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
     const rawUsers = unwrapCollection(response.data) || [];
-    users.value = rawUsers.map(normalizeUserData);
-    users.value = users.value.filter((user) => !!user.id);
+    users.value = rawUsers.map(normalizeUserData).filter((user) => !!user.id);
     await populateCatalogData(users.value);
     if (currentPage.value > totalPages.value) {
       currentPage.value = totalPages.value;
@@ -787,32 +795,88 @@ const fetchData = async () => {
   }
 };
 
-const confirmEmail = async (userId) => {
-  try {
-    await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-email`);
-    successMessage.value = 'Email confirmado exitosamente';
-
-    const user = users.value.find(u => u.id === userId);
-    if (user) user.emailConfirmed = true;
-
-    setTimeout(() => successMessage.value = null, 3000);
-  } catch (error) {
-    apiError.value = 'Error al confirmar email';
+const markUserConfirmationState = (user, channel, value) => {
+  if (!user) return;
+  if (channel === 'email') {
+    user.confirmingEmail = value;
+  } else if (channel === 'mobile') {
+    user.confirmingMobile = value;
   }
 };
 
-const confirmPhone = async (userId) => {
+const requestConfirmationCode = async (userId, channel) => {
+  return axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}`);
+};
+
+const verifyConfirmationCode = async (userId, channel, token) => {
+  return axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}/verificacion`, {
+    token
+  });
+};
+
+const handleConfirmation = async (userId, channel, { promptMessage, successMessageText }) => {
+  clearMessages();
+  const user = users.value.find((item) => item.id === userId);
+  markUserConfirmationState(user, channel, true);
   try {
-    await axiosInstance.patch(`/api/v1/usuarios/${userId}/confirm-phone`);
-    successMessage.value = 'Teléfono confirmado exitosamente';
+    await requestConfirmationCode(userId, channel);
+    const providedToken = window.prompt(promptMessage);
 
-    const user = users.value.find(u => u.id === userId);
-    if (user) user.mobileNumberConfirmed = true;
+    if (providedToken === null) {
+      successMessage.value = 'Se envió el código. Ingresa el token cuando estés listo.';
+      return;
+    }
 
-    setTimeout(() => successMessage.value = null, 3000);
+    const sanitizedToken = providedToken.trim();
+    if (!sanitizedToken) {
+      successMessage.value = 'Se envió el código. Debes ingresar un token válido para confirmar.';
+      return;
+    }
+
+    const response = await verifyConfirmationCode(userId, channel, sanitizedToken);
+    if (response?.data) {
+      if (channel === 'email') {
+        user.emailConfirmed = true;
+      }
+      if (channel === 'mobile') {
+        user.mobileNumberConfirmed = true;
+      }
+    }
+
+    successMessage.value = successMessageText;
+
+    if (user.emailConfirmed && user.mobileNumberConfirmed) {
+      successMessage.value = 'El usuario ahora tiene ambos canales verificados.';
+    }
   } catch (error) {
-    apiError.value = 'Error al confirmar teléfono';
+    console.error('❌ Error durante la confirmación:', error);
+    if (error.response?.data?.error?.message) {
+      apiError.value = error.response.data.error.message;
+    } else if (error.response?.status) {
+      apiError.value = `Error ${error.response.status}`;
+    } else {
+      apiError.value = 'No se pudo completar la confirmación';
+    }
+  } finally {
+    markUserConfirmationState(user, channel, false);
+    setTimeout(() => {
+      successMessage.value = null;
+    }, 4000);
   }
+};
+
+const confirmEmail = async (userId) => {
+  await handleConfirmation(userId, 'email', {
+    promptMessage: 'Ingresa el código de verificación que recibiste por correo electrónico',
+    successMessageText: 'Correo electrónico verificado exitosamente'
+  });
+};
+
+const confirmPhone = async (userId) => {
+  await handleConfirmation(userId, 'mobile', {
+    promptMessage: 'Ingresa el código que recibiste por SMS',
+    successMessageText: 'Teléfono móvil verificado exitosamente'
+  });
 };
 
 const getStatusText = (user) => {
