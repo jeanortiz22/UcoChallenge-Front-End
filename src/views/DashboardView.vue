@@ -162,19 +162,35 @@
       </footer>
     </section>
 
+    <ConfirmationModal
+      v-model="confirmationDialog.visible"
+      :title="confirmationDialog.title"
+      :description="confirmationDialog.description"
+      :input-label="confirmationDialog.inputLabel"
+      :input-placeholder="confirmationDialog.inputPlaceholder"
+      :submit-label="confirmationDialog.submitLabel"
+      :pending="confirmationDialog.submitting"
+      :error="confirmationDialog.error"
+      :code="confirmationDialog.code"
+      @update:code="(value) => (confirmationDialog.code = value)"
+      @submit="submitConfirmationCode"
+      @cancel="handleDialogCancel"
+    />
+
     <transition name="toast">
-      <div v-if="successMessage" class="toast">
-        {{ successMessage }}
+      <div v-if="toast.message" :class="['toast', toast.tone]">
+        {{ toast.message }}
       </div>
     </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
+import ConfirmationModal from '../components/ConfirmationModal.vue';
 
 const router = useRouter();
 const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
@@ -394,6 +410,12 @@ const deriveDepartmentFromUser = (user) => {
 const idTypeCatalog = new Map();
 const cityCatalog = new Map();
 
+const CITY_CATALOG_CONFIG = {
+  labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
+  idKeys: ['id', 'uuid', 'codigo', 'code']
+};
+
+
 const ensureIdentificationTypesCatalog = async () => {
   if (idTypeCatalog.size) return idTypeCatalog;
   try {
@@ -428,12 +450,10 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
   };
 
   const tryFetchCatalog = async (params) => {
+    if (!params?.departamentoId) return;
     try {
       const response = await axiosInstance.get('/api/v1/catalogo/ciudades', { params });
-      const catalog = normalizeCatalog(response.data, {
-        labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
-        idKeys: ['id', 'uuid', 'codigo', 'code']
-      });
+      const catalog = normalizeCatalog(response.data, CITY_CATALOG_CONFIG);
       registerEntries(catalog);
     } catch (error) {
       throw error;
@@ -463,23 +483,46 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
 
   // Recalcular faltantes
   missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
-  if (!missingIds.length) return cityCatalog;
+  if (!missingIds.length) return cityCatalog
 
-  // 2) Intentar por los IDs proporcionados, probando diferentes nombres de parámetro
-  const paramVariants = [
-    { key: 'ids', value: missingIds.join(',') },
-    { key: 'id', value: missingIds.join(',') },
-    { key: 'ciudadId', value: missingIds.join(',') }
-  ];
+  // Intentar cargar cada ciudad mediante el nuevo endpoint individual
+  if (missingIds.length) {
+    for (const cityId of [...missingIds]) {
+      if (!cityId || cityCatalog.has(cityId)) continue;
+      try {
+        const response = await axiosInstance.get(`/api/v1/catalogo/ciudades/${cityId}`);
+        const payloadCandidates = [response.data, response.data?.data, [response.data]];
+        let registered = false;
+        for (const candidate of payloadCandidates) {
+          if (!candidate) continue;
+          const entries = normalizeCatalog(candidate, CITY_CATALOG_CONFIG);
+          if (entries.length) {
+            registerEntries(entries);
+            registered = true;
+            break;
+          }
+        }
 
-  for (const variant of paramVariants) {
-    try {
-      await tryFetchCatalog({ [variant.key]: variant.value });
-    } catch (error) {
-      console.warn(`⚠️ No se pudieron cargar ciudades usando el parámetro "${variant.key}".`, error);
+        if (!registered) {
+          const rawCity = response.data?.data ?? response.data ?? null;
+          const derivedId = pickIdValue(rawCity, CITY_CATALOG_CONFIG.idKeys) || cityId;
+          if (derivedId) {
+            const derivedLabel =
+              pickTextValue(rawCity, CITY_CATALOG_CONFIG.labelKeys) || derivedId;
+            cityCatalog.set(derivedId, {
+              id: derivedId,
+              label: derivedLabel,
+              raw: rawCity,
+              department: pickValueForDepartment(rawCity)
+            });
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ No se pudo cargar la ciudad ${cityId} de forma individual.`, error);
+      }
     }
+
     missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
-    if (!missingIds.length) break;
   }
 
   // 3) Fallback: aprovechar la información almacenada en el usuario crudo
@@ -501,6 +544,7 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
 
   return cityCatalog;
 };
+
 
 const populateCatalogData = async (userList) => {
   // ✅ Helpers para decidir si falta label
@@ -590,7 +634,8 @@ const populateCatalogData = async (userList) => {
 const users = ref([]);
 const isLoading = ref(false);
 const apiError = ref(null);
-const successMessage = ref(null);
+const toast = reactive({ message: null, tone: 'info' });
+let toastTimeout = null;
 const currentPage = ref(1);
 const itemsPerPage = 10;
 
@@ -629,9 +674,26 @@ const verifiedRate = computed(() => {
   return Math.round((verifiedUsers.value / totalUsers.value) * 100);
 });
 
+const showToast = (message, tone = 'info') => {
+  toast.message = message;
+  toast.tone = tone;
+
+  if (toastTimeout) {
+    clearTimeout(toastTimeout);
+    toastTimeout = null;
+  }
+
+  if (message) {
+    toastTimeout = setTimeout(() => {
+      toast.message = null;
+      toastTimeout = null;
+    }, 4000);
+  }
+};
+
 const clearMessages = () => {
   apiError.value = null;
-  successMessage.value = null;
+  showToast(null);
 };
 
 const logout = () => {
@@ -652,6 +714,123 @@ const formatNames = (user) => {
 
 const formatSurnames = (user) => {
   return [user.firstSurname, user.secondSurname].filter(Boolean).join(' ') || 'N/A';
+};
+
+const confirmationDialog = reactive({
+  visible: false,
+  user: null,
+  userId: null,
+  channel: null,
+  title: '',
+  description: '',
+  successMessageText: '',
+  cancelMessage: '',
+  inputLabel: 'Código de verificación',
+  inputPlaceholder: 'Ingresa el código recibido',
+  submitLabel: 'Confirmar código',
+  code: '',
+  error: null,
+  submitting: false
+});
+
+const resetConfirmationDialog = () => {
+  confirmationDialog.visible = false;
+  confirmationDialog.user = null;
+  confirmationDialog.userId = null;
+  confirmationDialog.channel = null;
+  confirmationDialog.title = '';
+  confirmationDialog.description = '';
+  confirmationDialog.successMessageText = '';
+  confirmationDialog.cancelMessage = '';
+  confirmationDialog.inputLabel = 'Código de verificación';
+  confirmationDialog.inputPlaceholder = 'Ingresa el código recibido';
+  confirmationDialog.submitLabel = 'Confirmar código';
+  confirmationDialog.code = '';
+  confirmationDialog.error = null;
+  confirmationDialog.submitting = false;
+};
+
+const openConfirmationDialog = (user, channel, options = {}) => {
+  resetConfirmationDialog();
+  confirmationDialog.user = user || null;
+  confirmationDialog.userId = user?.id ?? null;
+  confirmationDialog.channel = channel;
+  confirmationDialog.title =
+    options.title || (channel === 'email' ? 'Confirmar correo electrónico' : 'Confirmar teléfono móvil');
+  confirmationDialog.description = options.description || '';
+  confirmationDialog.successMessageText =
+    options.successMessageText || 'Canal verificado exitosamente';
+  confirmationDialog.cancelMessage =
+    options.cancelMessage || 'Se envió el código. Ingresa el token cuando estés listo.';
+  confirmationDialog.inputLabel = options.inputLabel || 'Código de verificación';
+  confirmationDialog.inputPlaceholder = options.inputPlaceholder || 'Ingresa el código recibido';
+  confirmationDialog.submitLabel = options.submitLabel || 'Validar código';
+  confirmationDialog.code = '';
+  confirmationDialog.error = null;
+  confirmationDialog.submitting = false;
+  confirmationDialog.visible = true;
+};
+
+const closeConfirmationDialog = () => {
+  resetConfirmationDialog();
+};
+
+const handleDialogCancel = () => {
+  const cancelMessage = confirmationDialog.cancelMessage;
+  closeConfirmationDialog();
+  if (cancelMessage) {
+    showToast(cancelMessage, 'info');
+  }
+};
+
+const submitConfirmationCode = async () => {
+  if (!confirmationDialog.visible || confirmationDialog.submitting) return;
+
+  const sanitizedToken = confirmationDialog.code?.trim();
+  if (!sanitizedToken) {
+    confirmationDialog.error = 'Debes ingresar un código válido para confirmar.';
+    return;
+  }
+
+  confirmationDialog.submitting = true;
+  confirmationDialog.error = null;
+  apiError.value = null;
+
+  const { userId, channel } = confirmationDialog;
+  const targetUser = confirmationDialog.user || users.value.find((item) => item.id === userId);
+
+  try {
+    await verifyConfirmationCode(userId, channel, sanitizedToken);
+    if (targetUser) {
+      if (channel === 'email') {
+        targetUser.emailConfirmed = true;
+      }
+      if (channel === 'mobile') {
+        targetUser.mobileNumberConfirmed = true;
+      }
+    }
+
+    let message = confirmationDialog.successMessageText;
+    if (targetUser?.emailConfirmed && targetUser?.mobileNumberConfirmed) {
+      message = 'El usuario ahora tiene ambos canales verificados.';
+    }
+
+    closeConfirmationDialog();
+    showToast(message, 'success');
+  } catch (error) {
+    console.error('❌ Error durante la confirmación:', error);
+    if (error.response?.data?.error?.message) {
+      confirmationDialog.error = error.response.data.error.message;
+    } else if (error.response?.status === 400) {
+      confirmationDialog.error = 'El código ingresado no es válido o ya expiró.';
+    } else if (error.response?.status) {
+      confirmationDialog.error = `Error ${error.response.status}. No se pudo validar el código.`;
+    } else {
+      confirmationDialog.error = 'No se pudo completar la confirmación. Intenta nuevamente.';
+    }
+  } finally {
+    confirmationDialog.submitting = false;
+  }
 };
 
 const normalizeUserData = (rawUser) => {
@@ -776,7 +955,7 @@ const normalizeUserData = (rawUser) => {
 const fetchData = async () => {
   isLoading.value = true;
   apiError.value = null;
-  successMessage.value = null;
+  showToast(null);
 
   try {
     const response = await axiosInstance.get('/api/v1/usuarios');
@@ -817,51 +996,33 @@ const verifyConfirmationCode = async (userId, channel, token) => {
 const handleConfirmation = async (userId, channel, { promptMessage, successMessageText }) => {
   clearMessages();
   const user = users.value.find((item) => item.id === userId);
+  if (!user) return;
   markUserConfirmationState(user, channel, true);
   try {
     await requestConfirmationCode(userId, channel);
-    const providedToken = window.prompt(promptMessage);
-
-    if (providedToken === null) {
-      successMessage.value = 'Se envió el código. Ingresa el token cuando estés listo.';
-      return;
-    }
-
-    const sanitizedToken = providedToken.trim();
-    if (!sanitizedToken) {
-      successMessage.value = 'Se envió el código. Debes ingresar un token válido para confirmar.';
-      return;
-    }
-
-    const response = await verifyConfirmationCode(userId, channel, sanitizedToken);
-    if (response?.data) {
-      if (channel === 'email') {
-        user.emailConfirmed = true;
-      }
-      if (channel === 'mobile') {
-        user.mobileNumberConfirmed = true;
-      }
-    }
-
-    successMessage.value = successMessageText;
-
-    if (user.emailConfirmed && user.mobileNumberConfirmed) {
-      successMessage.value = 'El usuario ahora tiene ambos canales verificados.';
-    }
+    openConfirmationDialog(user, channel, {
+      title: channel === 'email' ? 'Confirmar correo electrónico' : 'Confirmar teléfono móvil',
+      description: promptMessage,
+      successMessageText,
+      inputLabel: channel === 'email' ? 'Código recibido por correo' : 'Código recibido por SMS',
+      inputPlaceholder: 'Ej: 123456',
+      submitLabel: 'Validar código'
+    });
   } catch (error) {
     console.error('❌ Error durante la confirmación:', error);
-    if (error.response?.data?.error?.message) {
-      apiError.value = error.response.data.error.message;
-    } else if (error.response?.status) {
-      apiError.value = `Error ${error.response.status}`;
-    } else {
-      apiError.value = 'No se pudo completar la confirmación';
+    const messageFromServer = error.response?.data?.error?.message;
+    let feedbackMessage = messageFromServer;
+
+    if (!feedbackMessage) {
+      if (error.response?.status) {
+        feedbackMessage = `Error ${error.response.status}. No se pudo enviar el código de confirmación.`;
+      } else {
+        feedbackMessage = 'No se pudo enviar el código de confirmación. Intenta nuevamente.';
+      }
     }
+    showToast(feedbackMessage, 'error');  
   } finally {
     markUserConfirmationState(user, channel, false);
-    setTimeout(() => {
-      successMessage.value = null;
-    }, 4000);
   }
 };
 
@@ -1341,13 +1502,31 @@ td {
   position: fixed;
   top: 20px;
   right: 20px;
-  background: rgba(16, 185, 129, 0.95);
-  color: #ecfdf5;
   padding: 1rem 1.4rem;
   border-radius: 16px;
-  box-shadow: 0 18px 38px -22px rgba(16, 185, 129, 0.55);
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
+  box-shadow: 0 18px 38px -22px rgba(15, 23, 42, 0.35);
   z-index: 20;
   font-weight: 600;
+}
+
+.toast.success {
+  background: rgba(16, 185, 129, 0.95);
+  color: #ecfdf5;
+  box-shadow: 0 18px 38px -22px rgba(16, 185, 129, 0.55);
+}
+
+.toast.info {
+  background: rgba(79, 70, 229, 0.95);
+  color: #ede9fe;
+  box-shadow: 0 18px 38px -22px rgba(79, 70, 229, 0.45);
+}
+
+.toast.error {
+  background: rgba(239, 68, 68, 0.95);
+  color: #fee2e2;
+  box-shadow: 0 18px 38px -22px rgba(239, 68, 68, 0.45);
 }
 
 @media (max-width: 1024px) {
