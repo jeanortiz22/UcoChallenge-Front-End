@@ -41,9 +41,6 @@ const logoutUser = () => {
 
           <div v-else class="user-actions">
             <span class="greeting">Hola, {{ user.name }}</span>
-            <button @click="goDashboard" class="nav-btn nav-ghost">
-              Dashboard
-            </button>
             <button @click="logoutUser" class="nav-btn nav-danger">
               Cerrar sesión
             </button>

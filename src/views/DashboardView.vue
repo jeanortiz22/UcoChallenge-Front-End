@@ -11,14 +11,11 @@
         <h1>Gestiona y verifica a tus delegados con claridad</h1>
         <p>
           Visualiza el estado de autenticación de cada usuario, confirma canales
-          pendientes y mantén tu organización sincronizada en tiempo real.
+          pendientes y mantén tu organización sincronizada.
         </p>
         <div class="hero-actions">
           <button @click="goToRegister" class="btn btn-primary">
             + Registrar nuevo usuario
-          </button>
-          <button @click="logout" class="btn btn-ghost">
-            Cerrar sesión
           </button>
         </div>
       </div>
@@ -637,7 +634,7 @@ const apiError = ref(null);
 const toast = reactive({ message: null, tone: 'info' });
 let toastTimeout = null;
 const currentPage = ref(1);
-const itemsPerPage = 10;
+const itemsPerPage = 5;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(users.value.length / itemsPerPage)));
 const paginatedUsers = computed(() => {

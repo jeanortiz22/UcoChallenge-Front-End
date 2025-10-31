@@ -48,8 +48,13 @@
                 id="firstName"
                 v-model="formData.firstName"
                 type="text"
+                :maxlength="NAME_MAX_LENGTH"
                 required
                 placeholder="Juan"
+                @keydown="onNameKeydown"
+                @paste.prevent="handleNamePaste('firstName', $event)"
+                @input="handleNameInput('firstName')"
+                @blur="handleNameBlur('firstName')"
               />
             </div>
 
@@ -60,6 +65,11 @@
                 v-model="formData.secondName"
                 type="text"
                 placeholder="Carlos"
+                :maxlength="NAME_MAX_LENGTH"
+                @keydown="onNameKeydown"
+                @paste.prevent="handleNamePaste('secondName', $event)"
+                @input="handleNameInput('secondName')"
+                @blur="handleNameBlur('secondName')"
               />
             </div>
           </div>
@@ -71,8 +81,13 @@
                 id="firstSurname"
                 v-model="formData.firstSurname"
                 type="text"
+                :maxlength="NAME_MAX_LENGTH"
                 required
                 placeholder="Pérez"
+                @keydown="onNameKeydown"
+                @paste.prevent="handleNamePaste('firstSurname', $event)"
+                @input="handleNameInput('firstSurname')"
+                @blur="handleNameBlur('firstSurname')"
               />
             </div>
 
@@ -82,7 +97,12 @@
                 id="secondSurname"
                 v-model="formData.secondSurname"
                 type="text"
-                placeholder="García"
+                placeholder="Naranjo"
+                :maxlength="NAME_MAX_LENGTH"
+                @keydown="onNameKeydown"
+                @paste.prevent="handleNamePaste('secondSurname', $event)"
+                @input="handleNameInput('secondSurname')"
+                @blur="handleNameBlur('secondSurname')"
               />
             </div>
           </div>
@@ -184,18 +204,29 @@
                 id="email"
                 v-model="formData.email"
                 type="email"
+                :maxlength="EMAIL_MAX_LENGTH"
                 required
                 placeholder="usuario@ucochallenge.com"
+                @input="handleEmailInput"
+                @blur="handleEmailBlur"
               />
             </div>
 
             <div class="form-group">
-              <label for="mobileNumber">Teléfono Móvil</label>
+              <label for="mobileNumber">Teléfono Móvil *</label>
               <input
                 id="mobileNumber"
                 v-model="formData.mobileNumber"
                 type="tel"
                 placeholder="3001234567"
+                required
+                inputmode="numeric"
+                pattern="[0-9]*"
+                :maxlength="PHONE_MAX_LENGTH"
+                @keydown="onPhoneKeydown"
+                @paste.prevent="handlePhonePaste($event)"
+                @input="handlePhoneInput"
+                @blur="handlePhoneBlur"
               />
             </div>
           </div>
@@ -233,18 +264,196 @@ const router = useRouter();
 
 // Form data matching RegisterUserDomain + new location fields
 const formData = ref({
-  idType: '', 
-  idNumber: '', 
+  idType: '',
+  idNumber: '',
   firstName: '',
   secondName: '',
   firstSurname: '',
   secondSurname: '',
-  country: '',  
+  country: '',
   department: '',
-  homeCity: '',   
-  email: '', 
+  homeCity: '',
+  email: '',
   mobileNumber: ''
 });
+
+const NAME_MAX_LENGTH = 20;
+const EMAIL_MAX_LENGTH = 255;
+const PHONE_MAX_LENGTH = 20;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const sanitizeName = (value = '') => {
+  if (!value) return '';
+
+  let sanitized = value.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/g, '');
+  sanitized = sanitized.replace(/\s+/g, ' ');
+  sanitized = sanitized.trim();
+
+  if (!sanitized) return '';
+
+  return sanitized.slice(0, NAME_MAX_LENGTH);
+};
+
+const sanitizeEmail = (value = '') => {
+  if (!value) return '';
+
+  let sanitized = value.replace(/\s+/g, '');
+  if (sanitized.length > EMAIL_MAX_LENGTH) {
+    sanitized = sanitized.slice(0, EMAIL_MAX_LENGTH);
+  }
+
+  return sanitized;
+};
+
+const sanitizePhone = (value = '') => {
+  if (!value) return '';
+
+  let sanitized = value.replace(/\D/g, '');
+  if (sanitized.length > PHONE_MAX_LENGTH) {
+    sanitized = sanitized.slice(0, PHONE_MAX_LENGTH);
+  }
+
+  return sanitized;
+};
+
+const CONTROL_KEYS = new Set([
+  'Backspace',
+  'Delete',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'Tab',
+  'Enter',
+  'Escape'
+]);
+
+const isLetterKey = (key = '') => /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]$/.test(key);
+
+const onNameKeydown = (event) => {
+  const { key, target } = event;
+
+  if (CONTROL_KEYS.has(key) || event.ctrlKey || event.metaKey || event.altKey) {
+    return;
+  }
+
+  if (key === ' ') {
+    if (!target || typeof target.value !== 'string') {
+      event.preventDefault();
+      return;
+    }
+
+    const input = target;
+    const value = input.value;
+    const selectionStart = input.selectionStart ?? 0;
+    const selectionEnd = input.selectionEnd ?? selectionStart;
+    const selectionCollapsed = selectionStart === selectionEnd;
+    const cursorAtStart = selectionStart === 0;
+    const cursorAtEnd = selectionEnd === value.length;
+
+    if (cursorAtStart || (selectionCollapsed && cursorAtEnd)) {
+      event.preventDefault();
+      return;
+    }
+
+    const previousChar = selectionCollapsed ? value.charAt(selectionStart - 1) : '';
+    if (previousChar === ' ') {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (!isLetterKey(key)) {
+    event.preventDefault();
+  }
+};
+
+const handleNameInput = (field) => {
+  formData.value[field] = sanitizeName(formData.value[field]);
+};
+
+const handleNameBlur = (field) => {
+  formData.value[field] = sanitizeName(formData.value[field]);
+};
+
+const handleNamePaste = (field, event) => {
+  const pasted = event.clipboardData?.getData('text') ?? '';
+  const target = event.target;
+
+  if (!target || typeof target.value !== 'string') {
+    formData.value[field] = sanitizeName(formData.value[field]);
+    return;
+  }
+
+  const { selectionStart = 0, selectionEnd = selectionStart, value } = target;
+  const combined = value.slice(0, selectionStart) + pasted + value.slice(selectionEnd);
+
+  formData.value[field] = sanitizeName(combined);
+};
+
+const handleEmailInput = () => {
+  formData.value.email = sanitizeEmail(formData.value.email);
+};
+
+const handleEmailBlur = () => {
+  formData.value.email = sanitizeEmail(formData.value.email);
+};
+
+const onPhoneKeydown = (event) => {
+  const { key, target } = event;
+
+  if (CONTROL_KEYS.has(key) || event.ctrlKey || event.metaKey || event.altKey) {
+    return;
+  }
+
+  if (/^\d$/.test(key)) {
+    if (!target || typeof target.value !== 'string') {
+      event.preventDefault();
+      return;
+    }
+
+    const input = target;
+    const currentLength = input.value.length;
+    const selectionStart = input.selectionStart ?? currentLength;
+    const selectionEnd = input.selectionEnd ?? currentLength;
+    const selectionLength = selectionEnd - selectionStart;
+
+    if (currentLength - selectionLength >= PHONE_MAX_LENGTH) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  event.preventDefault();
+};
+
+const handlePhoneInput = () => {
+  formData.value.mobileNumber = sanitizePhone(formData.value.mobileNumber);
+};
+
+const handlePhoneBlur = () => {
+  formData.value.mobileNumber = sanitizePhone(formData.value.mobileNumber);
+};
+
+const handlePhonePaste = (event) => {
+  const pasted = event.clipboardData?.getData('text') ?? '';
+  const target = event.target;
+
+  if (!target || typeof target.value !== 'string') {
+    formData.value.mobileNumber = sanitizePhone(formData.value.mobileNumber);
+    return;
+  }
+
+  const { selectionStart = 0, selectionEnd = selectionStart, value } = target;
+  const combined = value.slice(0, selectionStart) + pasted + value.slice(selectionEnd);
+
+  formData.value.mobileNumber = sanitizePhone(combined);
+};
+
+const isValidEmail = (value = '') => EMAIL_REGEX.test(value);
+
 
 // Catálogos
 const tiposIdentificacion = ref([]);
@@ -433,14 +642,57 @@ const handleSubmit = async () => {
   errorMessage.value = '';
 
   try {
+
+    const sanitizedFirstName = sanitizeName(formData.value.firstName);
+    const sanitizedSecondName = sanitizeName(formData.value.secondName);
+    const sanitizedFirstSurname = sanitizeName(formData.value.firstSurname);
+    const sanitizedSecondSurname = sanitizeName(formData.value.secondSurname);
+    const sanitizedEmail = sanitizeEmail(formData.value.email);
+    const sanitizedMobileNumber = sanitizePhone(formData.value.mobileNumber);
+
+    if (!sanitizedFirstName) {
+      errorMessage.value = 'El primer nombre es obligatorio y solo debe contener letras (máximo 20 caracteres).';
+      isSubmitting.value = false;
+      formData.value.firstName = '';
+      return;
+    }
+
+    if (!sanitizedFirstSurname) {
+      errorMessage.value = 'El primer apellido es obligatorio y solo debe contener letras (máximo 20 caracteres).';
+      isSubmitting.value = false;
+      formData.value.firstSurname = '';
+      return;
+    }
+
+    if (!sanitizedEmail || !isValidEmail(sanitizedEmail)) {
+      errorMessage.value = 'Ingresa un correo electrónico válido (máximo 255 caracteres).';
+      isSubmitting.value = false;
+      formData.value.email = sanitizedEmail;
+      return;
+    }
+
+    if (!sanitizedMobileNumber) {
+      errorMessage.value = 'El teléfono móvil es obligatorio y solo debe contener números (máximo 20 dígitos).';
+      isSubmitting.value = false;
+      formData.value.mobileNumber = sanitizedMobileNumber;
+      return;
+    }
+
+    formData.value.firstName = sanitizedFirstName;
+    formData.value.secondName = sanitizedSecondName;
+    formData.value.firstSurname = sanitizedFirstSurname;
+    formData.value.secondSurname = sanitizedSecondSurname;
+    formData.value.email = sanitizedEmail;
+    formData.value.mobileNumber = sanitizedMobileNumber;
+
     // Se envían los identificadores seleccionados para compatibilidad con las versiones vieja y nueva del API.
     const payload = {
       idType: formData.value.idType,
       idNumber: formData.value.idNumber,
-      firstName: formData.value.firstName,
-      secondName: formData.value.secondName || null,
-      firstSurname: formData.value.firstSurname,
-      secondSurname: formData.value.secondSurname || null,
+      firstName: sanitizedFirstName,
+      secondName: sanitizedSecondName,
+      firstSurname: sanitizedFirstSurname,
+      secondSurname: sanitizedSecondSurname,
       country: formData.value.country || null, // compatibilidad legado
       countryId: formData.value.country || null,
       department: formData.value.department || null, // compatibilidad legado
@@ -448,11 +700,11 @@ const handleSubmit = async () => {
       homeCity: formData.value.homeCity, // UUID de la ciudad (legado)
       homeCityId: formData.value.homeCity,
       cityId: formData.value.homeCity,
-      email: formData.value.email,
-      mobileNumber: formData.value.mobileNumber || null
+      email: sanitizedEmail,
+      mobileNumber: sanitizedMobileNumber
     };
 
-    console.log('📤 Enviando payload:', payload);
+    console.log(' Enviando payload:', payload);
     
     const response = await axiosInstance.post('/api/v1/usuarios', payload);
     
