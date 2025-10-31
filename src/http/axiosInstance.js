@@ -14,11 +14,12 @@ export const setAuth0Client = (client) => {
   auth0Client = client;
 };
 
+export const getAuth0Client = () => auth0Client;
+
 apiClient.interceptors.request.use(
   async (config) => {
     if (auth0Client && auth0Client.getAccessTokenSilently) {
       try {
-
         const rawIsAuthenticated = auth0Client.isAuthenticated;
         const isAuth = typeof rawIsAuthenticated === 'function'
           ? await rawIsAuthenticated.call(auth0Client)

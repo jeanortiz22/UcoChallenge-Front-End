@@ -14,7 +14,12 @@
           pendientes y mantén tu organización sincronizada.
         </p>
         <div class="hero-actions">
-          <button @click="goToRegister" class="btn btn-primary">
+          <button
+            @click="goToRegister"
+            class="btn btn-primary"
+            :disabled="!canCreate"
+            :aria-disabled="!canCreate"
+          >
             + Registrar nuevo usuario
           </button>
         </div>
@@ -50,10 +55,20 @@
       <button @click="fetchData" class="btn btn-primary">Reintentar</button>
     </section>
 
+    <section v-else-if="!canRead" class="state-card warning">
+      <h2>Permisos insuficientes</h2>
+      <p>No cuentas con los roles necesarios para visualizar este contenido.</p>
+    </section>
+
     <section v-else-if="users.length === 0" class="state-card empty">
       <h2>Aún no tienes usuarios registrados</h2>
       <p>Comienza registrando a tu primer delegado en la plataforma.</p>
-      <button @click="goToRegister" class="btn btn-primary">
+      <button
+        @click="goToRegister"
+        class="btn btn-primary"
+        :disabled="!canCreate"
+        :aria-disabled="!canCreate"
+      >
         Registrar primer usuario
       </button>
     </section>
@@ -64,7 +79,14 @@
           <h2>Usuarios registrados</h2>
           <p>Visualiza rápidamente el estado de autenticación de cada persona.</p>
         </div>
-        <button @click="fetchData" class="btn btn-ghost">Actualizar</button>
+        <button
+          @click="fetchData"
+          class="btn btn-ghost"
+          :disabled="isLoading || !canRead"
+          :aria-disabled="isLoading || !canRead"
+        >
+          Actualizar
+        </button>
       </div>
 
       <div class="table-wrapper">
@@ -120,7 +142,8 @@
                   @click="confirmEmail(user.id)"
                   class="btn-action email"
                   title="Confirmar email"
-                  :disabled="user.emailConfirmed || user.confirmingEmail"
+                  :disabled="!canRead || user.emailConfirmed || user.confirmingEmail"
+                  :aria-disabled="!canRead || user.emailConfirmed || user.confirmingEmail"
                 >
                   <template v-if="user.confirmingEmail">Enviando…</template>
                   <template v-else>{{ user.emailConfirmed ? 'Email verificado' : 'Confirmar email' }}</template>
@@ -129,7 +152,8 @@
                   @click="confirmPhone(user.id)"
                   class="btn-action phone"
                   title="Confirmar teléfono"
-                  :disabled="!user.mobileNumber || user.mobileNumberConfirmed || user.confirmingMobile"
+                  :disabled="!canRead || !user.mobileNumber || user.mobileNumberConfirmed || user.confirmingMobile"
+                  :aria-disabled="!canRead || !user.mobileNumber || user.mobileNumberConfirmed || user.confirmingMobile"
                 >
                   <template v-if="!user.mobileNumber">Sin teléfono</template>
                   <template v-else-if="user.confirmingMobile">Enviando…</template>
@@ -183,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
@@ -191,6 +215,22 @@ import ConfirmationModal from '../components/ConfirmationModal.vue';
 
 const router = useRouter();
 const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
+
+const rolesNamespace = (import.meta.env.VITE_AUTH0_NAMESPACE || import.meta.env.VITE_AUTH0_AUDIENCE || 'https://api.ucochallenge.com').replace(/\/$/, '');
+const rolesClaimKey = `${rolesNamespace}/roles`;
+
+const userRoles = computed(() => {
+  const currentUser = user?.value ?? user ?? null;
+  const claimValue = currentUser?.[rolesClaimKey];
+  if (Array.isArray(claimValue)) return claimValue;
+  if (typeof claimValue === 'string' && claimValue.trim().length) {
+    return [claimValue.trim()];
+  }
+  return [];
+});
+
+const canCreate = computed(() => userRoles.value.includes('admin:create'));
+const canRead = computed(() => userRoles.value.includes('admin:read'));
 
 const defaultIdKeys = ['id', 'uuid', 'codigo', 'code', 'value', 'valor'];
 const defaultLabelKeys = ['nombre', 'name', 'descripcion', 'description', 'detalle', 'label'];
@@ -702,6 +742,7 @@ const logout = () => {
 };
 
 const goToRegister = () => {
+  if (!canCreate.value) return;
   router.push({ name: 'register' });
 };
 
@@ -950,6 +991,9 @@ const normalizeUserData = (rawUser) => {
 };
 
 const fetchData = async () => {
+  if (!canRead.value) {
+    return;
+  }
   isLoading.value = true;
   apiError.value = null;
   showToast(null);
@@ -992,6 +1036,7 @@ const verifyConfirmationCode = async (userId, channel, token) => {
 
 const handleConfirmation = async (userId, channel, { promptMessage, successMessageText }) => {
   clearMessages();
+  if (!canRead.value) return;
   const user = users.value.find((item) => item.id === userId);
   if (!user) return;
   markUserConfirmationState(user, channel, true);
@@ -1069,7 +1114,15 @@ const previousPage = () => {
   }
 };
 
-onMounted(async () => {
+let hasLoadedInitialData = false;
+let loadingProtectedResources = false;
+
+const loadProtectedData = async () => {
+  if (!isAuthenticated.value || !canRead.value) return;
+  if (loadingProtectedResources) return;
+  if (hasLoadedInitialData) return;
+
+  loadingProtectedResources = true;
   try {
     const token = await getAccessTokenSilently({
       authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE }
@@ -1080,10 +1133,26 @@ onMounted(async () => {
     console.log('✅ isAuthenticated:', isAuthenticated.value);
 
     await fetchData();
+    hasLoadedInitialData = true;
   } catch (error) {
     console.error('Error obteniendo token en dashboard:', error);
+    hasLoadedInitialData = false;
+  } finally {
+    loadingProtectedResources = false;
   }
-});
+};
+
+watch(
+  () => [isAuthenticated.value, canRead.value],
+  ([authenticated, hasReadAccess]) => {
+    if (authenticated && hasReadAccess) {
+      loadProtectedData();
+    }
+  },
+  { immediate: true }
+);
+
+
 </script>
 
 <style scoped>
@@ -1275,6 +1344,15 @@ onMounted(async () => {
 
 .state-card.error {
   color: #b91c1c;
+}
+
+.state-card.warning {
+  color: #b45309;
+}
+
+.state-card.warning p {
+  color: #92400e;
+  margin: 0;
 }
 
 .state-card.empty h2 {
