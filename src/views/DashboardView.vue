@@ -213,24 +213,40 @@ import { useAuth0 } from '@auth0/auth0-vue';
 import axiosInstance from '../http/axiosInstance';
 import ConfirmationModal from '../components/ConfirmationModal.vue';
 
+// ⬅️ usamos helpers centralizados
+import { hasAnyRole } from '../utils/auth/roles.js';
+import { getMergedUserRoles } from '../utils/auth/mergedAuthz.js';
+
 const router = useRouter();
-const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user } = useAuth0();
+const { logout: auth0Logout, getAccessTokenSilently, isAuthenticated, user, idTokenClaims } = useAuth0();
 
-const rolesNamespace = (import.meta.env.VITE_AUTH0_NAMESPACE || import.meta.env.VITE_AUTH0_AUDIENCE || 'https://api.ucochallenge.com').replace(/\/$/, '');
-const rolesClaimKey = `${rolesNamespace}/roles`;
+/* =======================
+   ROLES / PERMISOS
+   ======================= */
+const mergedRoles = ref([]);
 
-const userRoles = computed(() => {
-  const currentUser = user?.value ?? user ?? null;
-  const claimValue = currentUser?.[rolesClaimKey];
-  if (Array.isArray(claimValue)) return claimValue;
-  if (typeof claimValue === 'string' && claimValue.trim().length) {
-    return [claimValue.trim()];
+const refreshRoles = async () => {
+  try {
+    mergedRoles.value = await getMergedUserRoles(
+      { getAccessTokenSilently, getUser: async () => user.value, user, idTokenClaims },
+      import.meta.env.VITE_AUTH0_AUDIENCE
+    );
+  } catch (e) {
+    console.warn('No se pudieron obtener roles/permisos combinados:', e);
+    mergedRoles.value = [];
   }
-  return [];
-});
+};
 
-const canCreate = computed(() => userRoles.value.includes('admin:create'));
-const canRead = computed(() => userRoles.value.includes('admin:read'));
+// refrescamos roles al autenticarse (y de una vez al montar)
+watch(() => isAuthenticated.value, (ok) => { if (ok) refreshRoles(); }, { immediate: true });
+
+// permisos derivados
+const canCreate = computed(() => hasAnyRole(mergedRoles.value, ['admin:create']));
+const canRead   = computed(() => hasAnyRole(mergedRoles.value, ['admin:read']));
+
+/* =======================
+   RESTO DE TU LÓGICA
+   ======================= */
 
 const defaultIdKeys = ['id', 'uuid', 'codigo', 'code', 'value', 'valor'];
 const defaultLabelKeys = ['nombre', 'name', 'descripcion', 'description', 'detalle', 'label'];
@@ -274,7 +290,6 @@ const resolveTextValue = (value) => {
       if (resolved !== null) return resolved;
     }
   }
-
   return null;
 };
 
@@ -291,7 +306,6 @@ const resolveIdValue = (value) => {
       }
     }
   }
-
   return null;
 };
 
@@ -315,21 +329,17 @@ const pickIdValue = (source, keys = []) => {
 
 const unwrapCollection = (payload) => {
   const seen = new WeakSet();
-
   const visit = (value) => {
     if (!value) return [];
     if (Array.isArray(value)) return value;
-
     if (typeof value === 'object') {
       if (seen.has(value)) return [];
       seen.add(value);
-
       const candidateKeys = [
-        'data', 'datos', 'content', 'results', 'result', 'items', 'item',
-        'value', 'values', 'records', 'rows', 'collection', 'entries', 'lista', 'list',
-        'usuarios', 'users'
+        'data','datos','content','results','result','items','item',
+        'value','values','records','rows','collection','entries','lista','list',
+        'usuarios','users'
       ];
-
       for (const key of candidateKeys) {
         const candidate = value?.[key];
         if (Array.isArray(candidate)) return candidate;
@@ -338,7 +348,6 @@ const unwrapCollection = (payload) => {
           if (nested.length) return nested;
         }
       }
-
       for (const nestedValue of Object.values(value)) {
         const resolved = visit(nestedValue);
         if (resolved.length) return resolved;
@@ -346,7 +355,6 @@ const unwrapCollection = (payload) => {
     }
     return [];
   };
-
   return visit(payload);
 };
 
@@ -356,51 +364,27 @@ const normalizeCatalog = (payload, { labelKeys = [], idKeys = [] } = {}) => {
     .map((entry) => {
       const id = pickIdValue(entry, [...idKeys, ...defaultIdKeys]);
       if (!id) return null;
-
-      const label =
-        pickTextValue(entry, [...labelKeys, ...defaultLabelKeys]) || id;
-
-      return {
-        id,
-        label,
-        raw: entry
-      };
+      const label = pickTextValue(entry, [...labelKeys, ...defaultLabelKeys]) || id;
+      return { id, label, raw: entry };
     })
     .filter(Boolean);
 };
 
 const pickValueForDepartment = (rawCity) => {
   if (!rawCity || typeof rawCity !== 'object') return null;
-
-  const departmentId = pickIdValue(rawCity, ['departamentoId', 'departmentId', 'departamento.id', 'departamento']);
+  const departmentId = pickIdValue(rawCity, ['departamentoId','departmentId','departamento.id','departamento']);
   if (!departmentId) return null;
-
   const departmentLabel =
-    pickTextValue(rawCity, ['departamentoNombre', 'departmentName', 'departamento']) || departmentId;
-
+    pickTextValue(rawCity, ['departamentoNombre','departmentName','departamento']) || departmentId;
   const departmentRaw = rawCity.departamento || rawCity.department || rawCity;
-
-  return {
-    id: departmentId,
-    label: departmentLabel,
-    raw: departmentRaw
-  };
+  return { id: departmentId, label: departmentLabel, raw: departmentRaw };
 };
 
 const deriveCityLabelFromUser = (user) =>
   pickTextValue(user?.raw ?? user, [
-    'homeCityName',
-    'ciudadResidenciaNombre',
-    'ciudadResidencia',
-    'cityName',
-    'ciudadNombre',
-    'ciudadDescripcion',
-    'homeCity.nombre',
-    'homeCity.name',
-    'homeCity.descripcion',
-    'homeCity.label',
-    'ciudad',
-    'city'
+    'homeCityName','ciudadResidenciaNombre','ciudadResidencia','cityName',
+    'ciudadNombre','ciudadDescripcion','homeCity.nombre','homeCity.name',
+    'homeCity.descripcion','homeCity.label','ciudad','city'
   ]);
 
 const deriveDepartmentFromUser = (user) => {
@@ -410,61 +394,42 @@ const deriveDepartmentFromUser = (user) => {
 
   const departmentId =
     pickIdValue(rawSource, [
-      'departmentId',
-      'departamentoId',
-      'departamento.id',
-      'departamento',
-      'homeCity.departamento',
-      'homeCity.department'
+      'departmentId','departamentoId','departamento.id','departamento',
+      'homeCity.departamento','homeCity.department'
     ]) || user?.departmentId || null;
 
   if (!departmentId) return null;
 
   const departmentLabel =
     pickTextValue(rawSource, [
-      'homeDepartmentName',
-      'departamentoResidencia',
-      'departmentName',
-      'departamento',
-      'department',
-      'homeCity.departmentName'
+      'homeDepartmentName','departamentoResidencia','departmentName',
+      'departamento','department','homeCity.departmentName'
     ]) || user?.departmentName || departmentId;
 
   const departmentRaw =
-    rawSource?.departamento ||
-    rawSource?.department ||
-    rawSource?.homeCity?.departamento ||
-    rawSource?.homeCity?.department ||
-    null;
+    rawSource?.departamento || rawSource?.department ||
+    rawSource?.homeCity?.departamento || rawSource?.homeCity?.department || null;
 
-  return {
-    id: departmentId,
-    label: departmentLabel,
-    raw: departmentRaw
-  };
+  return { id: departmentId, label: departmentLabel, raw: departmentRaw };
 };
 
 const idTypeCatalog = new Map();
 const cityCatalog = new Map();
 
 const CITY_CATALOG_CONFIG = {
-  labelKeys: ['name', 'nombre', 'descripcion', 'ciudad', 'ciudadNombre', 'city'],
-  idKeys: ['id', 'uuid', 'codigo', 'code']
+  labelKeys: ['name','nombre','descripcion','ciudad','ciudadNombre','city'],
+  idKeys: ['id','uuid','codigo','code']
 };
-
 
 const ensureIdentificationTypesCatalog = async () => {
   if (idTypeCatalog.size) return idTypeCatalog;
   try {
     const response = await axiosInstance.get('/api/v1/catalogo/tipos-documento');
     const catalog = normalizeCatalog(response.data, {
-      // Incluimos 'name' para payloads { id, name }
-      labelKeys: ['name', 'nombre', 'descripcion', 'descripcionCorta', 'abreviatura', 'tipoDocumento'],
-      idKeys: ['id', 'uuid', 'codigo', 'code']
+      labelKeys: ['name','nombre','descripcion','descripcionCorta','abreviatura','tipoDocumento'],
+      idKeys: ['id','uuid','codigo','code']
     });
-    catalog.forEach((item) => {
-      idTypeCatalog.set(item.id, item);
-    });
+    catalog.forEach((item) => idTypeCatalog.set(item.id, item));
   } catch (error) {
     console.error('❌ Error al cargar catálogo de tipos de identificación en dashboard:', error);
   }
@@ -479,10 +444,7 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
     entries.forEach((item) => {
       if (!item || cityCatalog.has(item.id)) return;
       const departmentData = pickValueForDepartment(item.raw);
-      cityCatalog.set(item.id, {
-        ...item,
-        department: departmentData
-      });
+      cityCatalog.set(item.id, { ...item, department: departmentData });
     });
   };
 
@@ -497,7 +459,6 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
     }
   };
 
-  // 1) Agrupar por departamento (si se puede inferir desde los usuarios)
   const groupedByDepartment = new Map();
   usersContext.forEach((user) => {
     if (!user || !missingIds.includes(user.cityId)) return;
@@ -518,11 +479,9 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
     }
   }
 
-  // Recalcular faltantes
   missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
-  if (!missingIds.length) return cityCatalog
+  if (!missingIds.length) return cityCatalog;
 
-  // Intentar cargar cada ciudad mediante el nuevo endpoint individual
   if (missingIds.length) {
     for (const cityId of [...missingIds]) {
       if (!cityId || cityCatalog.has(cityId)) continue;
@@ -539,13 +498,11 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
             break;
           }
         }
-
         if (!registered) {
           const rawCity = response.data?.data ?? response.data ?? null;
           const derivedId = pickIdValue(rawCity, CITY_CATALOG_CONFIG.idKeys) || cityId;
           if (derivedId) {
-            const derivedLabel =
-              pickTextValue(rawCity, CITY_CATALOG_CONFIG.labelKeys) || derivedId;
+            const derivedLabel = pickTextValue(rawCity, CITY_CATALOG_CONFIG.labelKeys) || derivedId;
             cityCatalog.set(derivedId, {
               id: derivedId,
               label: derivedLabel,
@@ -558,18 +515,15 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
         console.warn(`⚠️ No se pudo cargar la ciudad ${cityId} de forma individual.`, error);
       }
     }
-
     missingIds = missingIds.filter((id) => id && !cityCatalog.has(id));
   }
 
-  // 3) Fallback: aprovechar la información almacenada en el usuario crudo
   if (missingIds.length) {
     usersContext.forEach((user) => {
       if (!user || !missingIds.includes(user.cityId)) return;
       const label = deriveCityLabelFromUser(user);
       if (!label) return;
       const departmentData = deriveDepartmentFromUser(user);
-
       cityCatalog.set(user.cityId, {
         id: user.cityId,
         label,
@@ -582,20 +536,14 @@ const ensureCitiesCatalog = async (cityIds, usersContext = []) => {
   return cityCatalog;
 };
 
-
 const populateCatalogData = async (userList) => {
-  // ✅ Helpers para decidir si falta label
   const needsIdTypeLabel = (u) =>
     (!u.idTypeName || u.idTypeName === 'N/A' || u.idTypeName === u.idTypeId || isLikelyId(u.idTypeName));
-
   const needsCityLabel = (u) =>
     (!u.cityName || u.cityName === 'N/A' || u.cityName === u.cityId || isLikelyId(u.cityName));
 
-  // === Tipos de identificación ===
   const missingIdTypeIds = [...new Set(
-    userList
-      .filter((u) => needsIdTypeLabel(u) && u.idTypeId)
-      .map((u) => u.idTypeId)
+    userList.filter((u) => needsIdTypeLabel(u) && u.idTypeId).map((u) => u.idTypeId)
   )];
 
   if (missingIdTypeIds.length) {
@@ -603,18 +551,13 @@ const populateCatalogData = async (userList) => {
     userList.forEach((user) => {
       if (needsIdTypeLabel(user) && user.idTypeId) {
         const catalogEntry = idTypeCatalog.get(user.idTypeId);
-        if (catalogEntry?.label) {
-          user.idTypeName = catalogEntry.label;
-        }
+        if (catalogEntry?.label) user.idTypeName = catalogEntry.label;
       }
     });
   }
 
-  // === Ciudades ===
   const missingCityIds = [...new Set(
-    userList
-      .filter((u) => needsCityLabel(u) && u.cityId)
-      .map((u) => u.cityId)
+    userList.filter((u) => needsCityLabel(u) && u.cityId).map((u) => u.cityId)
   )];
 
   if (missingCityIds.length) {
@@ -622,48 +565,29 @@ const populateCatalogData = async (userList) => {
     userList.forEach((user) => {
       if (needsCityLabel(user) && user.cityId) {
         const cityEntry = cityCatalog.get(user.cityId);
-        if (cityEntry?.label) {
-          user.cityName = cityEntry.label;
-        }
+        if (cityEntry?.label) user.cityName = cityEntry.label;
         const departmentEntry = cityEntry?.department ?? pickValueForDepartment(cityEntry?.raw);
         if (departmentEntry) {
           user.departmentId = user.departmentId || departmentEntry.id;
-          if (!user.departmentName || user.departmentName === 'N/A') {
-            user.departmentName = departmentEntry.label;
-          }
+          if (!user.departmentName || user.departmentName === 'N/A') user.departmentName = departmentEntry.label;
         }
       }
     });
   }
 
-  // === Fallbacks sin mostrar UUIDs ===
   userList.forEach((user) => {
-    if (!user.idTypeName || user.idTypeName === 'N/A' || isLikelyId(user.idTypeName)) {
-      user.idTypeName = '—';
-    }
+    if (!user.idTypeName || user.idTypeName === 'N/A' || isLikelyId(user.idTypeName)) user.idTypeName = '—';
 
     if (needsCityLabel(user)) {
       const fallbackCity = deriveCityLabelFromUser(user);
-      if (fallbackCity && !isLikelyId(fallbackCity)) {
-        user.cityName = fallbackCity;
-      }
+      if (fallbackCity && !isLikelyId(fallbackCity)) user.cityName = fallbackCity;
     }
-
-    if (!user.cityName || user.cityName === 'N/A' || isLikelyId(user.cityName)) {
-      user.cityName = '—';
-    }
+    if (!user.cityName || user.cityName === 'N/A' || isLikelyId(user.cityName)) user.cityName = '—';
 
     const departmentData = deriveDepartmentFromUser(user);
-    if (departmentData?.id && !user.departmentId) {
-      user.departmentId = departmentData.id;
-    }
-
+    if (departmentData?.id && !user.departmentId) user.departmentId = departmentData.id;
     if (!user.departmentName || user.departmentName === 'N/A') {
-      if (departmentData?.label) {
-        user.departmentName = departmentData.label;
-      } else {
-        user.departmentName = user.departmentId || null;
-      }
+      user.departmentName = departmentData?.label || user.departmentId || null;
     }
   });
 };
@@ -714,31 +638,16 @@ const verifiedRate = computed(() => {
 const showToast = (message, tone = 'info') => {
   toast.message = message;
   toast.tone = tone;
-
-  if (toastTimeout) {
-    clearTimeout(toastTimeout);
-    toastTimeout = null;
-  }
-
+  if (toastTimeout) { clearTimeout(toastTimeout); toastTimeout = null; }
   if (message) {
-    toastTimeout = setTimeout(() => {
-      toast.message = null;
-      toastTimeout = null;
-    }, 4000);
+    toastTimeout = setTimeout(() => { toast.message = null; toastTimeout = null; }, 4000);
   }
 };
 
-const clearMessages = () => {
-  apiError.value = null;
-  showToast(null);
-};
+const clearMessages = () => { apiError.value = null; showToast(null); };
 
 const logout = () => {
-  auth0Logout({
-    logoutParams: {
-      returnTo: window.location.origin
-    }
-  });
+  auth0Logout({ logoutParams: { returnTo: window.location.origin } });
 };
 
 const goToRegister = () => {
@@ -746,46 +655,23 @@ const goToRegister = () => {
   router.push({ name: 'register' });
 };
 
-const formatNames = (user) => {
-  return [user.firstName, user.secondName].filter(Boolean).join(' ') || 'N/A';
-};
-
-const formatSurnames = (user) => {
-  return [user.firstSurname, user.secondSurname].filter(Boolean).join(' ') || 'N/A';
-};
+const formatNames = (user) => [user.firstName, user.secondName].filter(Boolean).join(' ') || 'N/A';
+const formatSurnames = (user) => [user.firstSurname, user.secondSurname].filter(Boolean).join(' ') || 'N/A';
 
 const confirmationDialog = reactive({
-  visible: false,
-  user: null,
-  userId: null,
-  channel: null,
-  title: '',
-  description: '',
-  successMessageText: '',
-  cancelMessage: '',
-  inputLabel: 'Código de verificación',
-  inputPlaceholder: 'Ingresa el código recibido',
-  submitLabel: 'Confirmar código',
-  code: '',
-  error: null,
-  submitting: false
+  visible: false, user: null, userId: null, channel: null, title: '', description: '',
+  successMessageText: '', cancelMessage: '', inputLabel: 'Código de verificación',
+  inputPlaceholder: 'Ingresa el código recibido', submitLabel: 'Confirmar código',
+  code: '', error: null, submitting: false
 });
 
 const resetConfirmationDialog = () => {
-  confirmationDialog.visible = false;
-  confirmationDialog.user = null;
-  confirmationDialog.userId = null;
-  confirmationDialog.channel = null;
-  confirmationDialog.title = '';
-  confirmationDialog.description = '';
-  confirmationDialog.successMessageText = '';
-  confirmationDialog.cancelMessage = '';
-  confirmationDialog.inputLabel = 'Código de verificación';
-  confirmationDialog.inputPlaceholder = 'Ingresa el código recibido';
-  confirmationDialog.submitLabel = 'Confirmar código';
-  confirmationDialog.code = '';
-  confirmationDialog.error = null;
-  confirmationDialog.submitting = false;
+  confirmationDialog.visible = false; confirmationDialog.user = null; confirmationDialog.userId = null;
+  confirmationDialog.channel = null; confirmationDialog.title = ''; confirmationDialog.description = '';
+  confirmationDialog.successMessageText = ''; confirmationDialog.cancelMessage = '';
+  confirmationDialog.inputLabel = 'Código de verificación'; confirmationDialog.inputPlaceholder = 'Ingresa el código recibido';
+  confirmationDialog.submitLabel = 'Confirmar código'; confirmationDialog.code = '';
+  confirmationDialog.error = null; confirmationDialog.submitting = false;
 };
 
 const openConfirmationDialog = (user, channel, options = {}) => {
@@ -793,13 +679,10 @@ const openConfirmationDialog = (user, channel, options = {}) => {
   confirmationDialog.user = user || null;
   confirmationDialog.userId = user?.id ?? null;
   confirmationDialog.channel = channel;
-  confirmationDialog.title =
-    options.title || (channel === 'email' ? 'Confirmar correo electrónico' : 'Confirmar teléfono móvil');
+  confirmationDialog.title = options.title || (channel === 'email' ? 'Confirmar correo electrónico' : 'Confirmar teléfono móvil');
   confirmationDialog.description = options.description || '';
-  confirmationDialog.successMessageText =
-    options.successMessageText || 'Canal verificado exitosamente';
-  confirmationDialog.cancelMessage =
-    options.cancelMessage || 'Se envió el código. Ingresa el token cuando estés listo.';
+  confirmationDialog.successMessageText = options.successMessageText || 'Canal verificado exitosamente';
+  confirmationDialog.cancelMessage = options.cancelMessage || 'Se envió el código. Ingresa el token cuando estés listo.';
   confirmationDialog.inputLabel = options.inputLabel || 'Código de verificación';
   confirmationDialog.inputPlaceholder = options.inputPlaceholder || 'Ingresa el código recibido';
   confirmationDialog.submitLabel = options.submitLabel || 'Validar código';
@@ -809,26 +692,18 @@ const openConfirmationDialog = (user, channel, options = {}) => {
   confirmationDialog.visible = true;
 };
 
-const closeConfirmationDialog = () => {
-  resetConfirmationDialog();
-};
+const closeConfirmationDialog = () => { resetConfirmationDialog(); };
 
 const handleDialogCancel = () => {
   const cancelMessage = confirmationDialog.cancelMessage;
   closeConfirmationDialog();
-  if (cancelMessage) {
-    showToast(cancelMessage, 'info');
-  }
+  if (cancelMessage) showToast(cancelMessage, 'info');
 };
 
 const submitConfirmationCode = async () => {
   if (!confirmationDialog.visible || confirmationDialog.submitting) return;
-
   const sanitizedToken = confirmationDialog.code?.trim();
-  if (!sanitizedToken) {
-    confirmationDialog.error = 'Debes ingresar un código válido para confirmar.';
-    return;
-  }
+  if (!sanitizedToken) { confirmationDialog.error = 'Debes ingresar un código válido para confirmar.'; return; }
 
   confirmationDialog.submitting = true;
   confirmationDialog.error = null;
@@ -840,19 +715,13 @@ const submitConfirmationCode = async () => {
   try {
     await verifyConfirmationCode(userId, channel, sanitizedToken);
     if (targetUser) {
-      if (channel === 'email') {
-        targetUser.emailConfirmed = true;
-      }
-      if (channel === 'mobile') {
-        targetUser.mobileNumberConfirmed = true;
-      }
+      if (channel === 'email') targetUser.emailConfirmed = true;
+      if (channel === 'mobile') targetUser.mobileNumberConfirmed = true;
     }
-
     let message = confirmationDialog.successMessageText;
     if (targetUser?.emailConfirmed && targetUser?.mobileNumberConfirmed) {
       message = 'El usuario ahora tiene ambos canales verificados.';
     }
-
     closeConfirmationDialog();
     showToast(message, 'success');
   } catch (error) {
@@ -876,124 +745,48 @@ const normalizeUserData = (rawUser) => {
   const mobileNumberConfirmed = rawUser.mobileNumberConfirmed ?? rawUser.telefonoMovilConfirmado ?? rawUser.mobile_number_confirmed ?? false;
 
   const idTypeId =
-    pickIdValue(rawUser, [
-      'idTypeId',
-      'idType',
-      'tipoIdentificacionId',
-      'tipoIdentificacion'
-    ]) || null;
+    pickIdValue(rawUser, ['idTypeId','idType','tipoIdentificacionId','tipoIdentificacion']) || null;
 
   const cityId =
-    pickIdValue(rawUser, [
-      'homeCityId',
-      'homeCity',
-      'ciudadResidenciaId',
-      'ciudadResidencia',
-      'cityId',
-      'homeCity.cityId',
-      'ciudadId',
-      'ciudad.id'
-    ]) || null;
+    pickIdValue(rawUser, ['homeCityId','homeCity','ciudadResidenciaId','ciudadResidencia','cityId','homeCity.cityId','ciudadId','ciudad.id']) || null;
 
   const departmentId =
-    pickIdValue(rawUser, [
-      'departmentId',
-      'department',
-      'departamentoId',
-      'departamento',
-      'homeDepartmentId',
-      'homeDepartment',
-      'homeCity.departamento',
-      'homeCity.department'
-    ]) || null;
+    pickIdValue(rawUser, ['departmentId','department','departamentoId','departamento','homeDepartmentId','homeDepartment','homeCity.departamento','homeCity.department']) || null;
 
   const countryId =
-    pickIdValue(rawUser, [
-      'countryId',
-      'country',
-      'paisId',
-      'pais',
-      'homeCountryId',
-      'homeCountry',
-      'homeCity.departamento.pais',
-      'homeCity.department.country'
-    ]) || null;
+    pickIdValue(rawUser, ['countryId','country','paisId','pais','homeCountryId','homeCountry','homeCity.departamento.pais','homeCity.department.country']) || null;
 
   const idTypeName =
-    pickTextValue(rawUser, [
-      'idTypeName',
-      'tipoIdentificacionNombre',
-      'tipoDocumento',
-      'tipoIdentificacion',
-      'idType'
-    ]) || 'N/A';
+    pickTextValue(rawUser, ['idTypeName','tipoIdentificacionNombre','tipoDocumento','tipoIdentificacion','idType']) || 'N/A';
 
   const cityName =
-    pickTextValue(rawUser, [
-      'homeCityName',
-      'ciudadResidenciaNombre',
-      'ciudadResidencia',
-      'cityName',
-      'homeCity',
-      'ciudad',
-      'city',
-      'homeCity.nombre',
-      'homeCity.name',
-      'homeCity.descripcion'
-    ]) || 'N/A';
+    pickTextValue(rawUser, ['homeCityName','ciudadResidenciaNombre','ciudadResidencia','cityName','homeCity','ciudad','city','homeCity.nombre','homeCity.name','homeCity.descripcion']) || 'N/A';
 
   const departmentName =
-    pickTextValue(rawUser, [
-      'homeDepartmentName',
-      'departamentoResidencia',
-      'departmentName',
-      'homeCity.departamento',
-      'homeCity.department',
-      'departamento',
-      'department',
-      'homeCity.departmentName'
-    ]) || null;
+    pickTextValue(rawUser, ['homeDepartmentName','departamentoResidencia','departmentName','homeCity.departamento','homeCity.department','departamento','department','homeCity.departmentName']) || null;
 
   const userId =
-    pickIdValue(rawUser, [
-      'id',
-      'userId',
-      'usuarioId',
-      'idUsuario',
-      'uuid',
-      'codigo',
-      'code',
-      'identifier'
-    ]) || rawUser.idNumber || rawUser.email || null;
+    pickIdValue(rawUser, ['id','userId','usuarioId','idUsuario','uuid','codigo','code','identifier']) || rawUser.idNumber || rawUser.email || null;
 
   return {
     id: userId,
-    idTypeId,
-    idTypeName,
+    idTypeId, idTypeName,
     idNumber: rawUser.idNumber ?? rawUser.numeroIdentificacion ?? null,
     firstName: rawUser.firstName ?? rawUser.primerNombre ?? null,
     secondName: rawUser.secondName ?? rawUser.segundoNombre ?? null,
     firstSurname: rawUser.firstSurname ?? rawUser.primerApellido ?? null,
     secondSurname: rawUser.secondSurname ?? rawUser.segundoApellido ?? null,
-    cityId,
-    cityName,
-    departmentId,
-    departmentName,
-    countryId,
+    cityId, cityName, departmentId, departmentName, countryId,
     email: rawUser.email ?? '—',
     mobileNumber: rawUser.mobileNumber ?? rawUser.telefonoMovil ?? null,
-    emailConfirmed,
-    mobileNumberConfirmed,
-    confirmingEmail: false,
-    confirmingMobile: false,
+    emailConfirmed, mobileNumberConfirmed,
+    confirmingEmail: false, confirmingMobile: false,
     raw: rawUser
   };
 };
 
 const fetchData = async () => {
-  if (!canRead.value) {
-    return;
-  }
+  if (!canRead.value) return;
   isLoading.value = true;
   apiError.value = null;
   showToast(null);
@@ -1003,13 +796,9 @@ const fetchData = async () => {
     const rawUsers = unwrapCollection(response.data) || [];
     users.value = rawUsers.map(normalizeUserData).filter((user) => !!user.id);
     await populateCatalogData(users.value);
-    if (currentPage.value > totalPages.value) {
-      currentPage.value = totalPages.value;
-    }
+    if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
   } catch (error) {
-    apiError.value = error.response
-      ? `Error ${error.response.status}`
-      : 'Error de conexión';
+    apiError.value = error.response ? `Error ${error.response.status}` : 'Error de conexión';
   } finally {
     isLoading.value = false;
   }
@@ -1017,32 +806,26 @@ const fetchData = async () => {
 
 const markUserConfirmationState = (user, channel, value) => {
   if (!user) return;
-  if (channel === 'email') {
-    user.confirmingEmail = value;
-  } else if (channel === 'mobile') {
-    user.confirmingMobile = value;
-  }
+  if (channel === 'email') user.confirmingEmail = value;
+  else if (channel === 'mobile') user.confirmingMobile = value;
 };
 
-const requestConfirmationCode = async (userId, channel) => {
-  return axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}`);
-};
+const requestConfirmationCode = async (userId, channel) =>
+  axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}`);
 
-const verifyConfirmationCode = async (userId, channel, token) => {
-  return axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}/verificacion`, {
-    token
-  });
-};
+const verifyConfirmationCode = async (userId, channel, token) =>
+  axiosInstance.post(`/api/v1/usuarios/${userId}/confirmaciones/${channel}/verificacion`, { token });
 
 const handleConfirmation = async (userId, channel, { promptMessage, successMessageText }) => {
   clearMessages();
   if (!canRead.value) return;
-  const user = users.value.find((item) => item.id === userId);
-  if (!user) return;
-  markUserConfirmationState(user, channel, true);
+  const target = users.value.find((item) => item.id === userId);
+  if (!target) return;
+
+  markUserConfirmationState(target, channel, true);
   try {
     await requestConfirmationCode(userId, channel);
-    openConfirmationDialog(user, channel, {
+    openConfirmationDialog(target, channel, {
       title: channel === 'email' ? 'Confirmar correo electrónico' : 'Confirmar teléfono móvil',
       description: promptMessage,
       successMessageText,
@@ -1054,17 +837,13 @@ const handleConfirmation = async (userId, channel, { promptMessage, successMessa
     console.error('❌ Error durante la confirmación:', error);
     const messageFromServer = error.response?.data?.error?.message;
     let feedbackMessage = messageFromServer;
-
     if (!feedbackMessage) {
-      if (error.response?.status) {
-        feedbackMessage = `Error ${error.response.status}. No se pudo enviar el código de confirmación.`;
-      } else {
-        feedbackMessage = 'No se pudo enviar el código de confirmación. Intenta nuevamente.';
-      }
+      if (error.response?.status) feedbackMessage = `Error ${error.response.status}. No se pudo enviar el código de confirmación.`;
+      else feedbackMessage = 'No se pudo enviar el código de confirmación. Intenta nuevamente.';
     }
     showToast(feedbackMessage, 'error');  
   } finally {
-    markUserConfirmationState(user, channel, false);
+    markUserConfirmationState(target, channel, false);
   }
 };
 
@@ -1083,36 +862,19 @@ const confirmPhone = async (userId) => {
 };
 
 const getStatusText = (user) => {
-  if (user.emailConfirmed && user.mobileNumberConfirmed) {
-    return '✓ Autenticado';
-  }
-  if (user.emailConfirmed || user.mobileNumberConfirmed) {
-    return '⚠ Verificación parcial';
-  }
+  if (user.emailConfirmed && user.mobileNumberConfirmed) return '✓ Autenticado';
+  if (user.emailConfirmed || user.mobileNumberConfirmed) return '⚠ Verificación parcial';
   return '✗ Pendiente';
 };
 
 const getStatusClass = (user) => {
-  if (user.emailConfirmed && user.mobileNumberConfirmed) {
-    return 'status-badge authenticated';
-  }
-  if (user.emailConfirmed || user.mobileNumberConfirmed) {
-    return 'status-badge partial';
-  }
+  if (user.emailConfirmed && user.mobileNumberConfirmed) return 'status-badge authenticated';
+  if (user.emailConfirmed || user.mobileNumberConfirmed) return 'status-badge partial';
   return 'status-badge pending';
 };
 
-const nextPage = () => {
-  if (currentPage.value < totalPages.value) {
-    currentPage.value++;
-  }
-};
-
-const previousPage = () => {
-  if (currentPage.value > 1) {
-    currentPage.value--;
-  }
-};
+const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
+const previousPage = () => { if (currentPage.value > 1) currentPage.value--; };
 
 let hasLoadedInitialData = false;
 let loadingProtectedResources = false;
@@ -1142,18 +904,16 @@ const loadProtectedData = async () => {
   }
 };
 
+// cuando hay sesión y permiso de lectura, carga datos protegidos
 watch(
   () => [isAuthenticated.value, canRead.value],
   ([authenticated, hasReadAccess]) => {
-    if (authenticated && hasReadAccess) {
-      loadProtectedData();
-    }
+    if (authenticated && hasReadAccess) loadProtectedData();
   },
   { immediate: true }
 );
-
-
 </script>
+
 
 <style scoped>
 .dashboard-shell {

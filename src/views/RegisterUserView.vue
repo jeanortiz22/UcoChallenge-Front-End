@@ -128,14 +128,22 @@
 
             <div class="form-group">
               <label for="idNumber">Número de Identificación *</label>
-              <input
-                id="idNumber"
-                v-model="formData.idNumber"
-                type="text"
-                required
-                placeholder="1234567890"
+                <input
+                  id="idNumber"
+                  v-model="formData.idNumber"
+                  type="text"
+                  required
+                  placeholder="1234567890"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  :maxlength="IDNUMBER_MAX_LENGTH"
+                  @keydown="onIdKeydown"
+                  @paste.prevent="handleIdPaste"
+                  @input="handleIdInput"
+                  @blur="handleIdBlur"
               />
             </div>
+
           </div>
           <div class="form-row location-row">
             <div class="form-group">
@@ -280,6 +288,7 @@ const formData = ref({
 const NAME_MAX_LENGTH = 20;
 const EMAIL_MAX_LENGTH = 255;
 const PHONE_MAX_LENGTH = 20;
+const IDNUMBER_MAX_LENGTH = 25; 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const sanitizeName = (value = '') => {
@@ -304,6 +313,68 @@ const sanitizeEmail = (value = '') => {
 
   return sanitized;
 };
+
+// ── ID NUMBER: solo dígitos y máx 25 ──────────────────────────────────────────
+const sanitizeIdNumber = (value = '') => {
+  if (!value) return '';
+  let sanitized = value.replace(/\D/g, '');
+  if (sanitized.length > IDNUMBER_MAX_LENGTH) {
+    sanitized = sanitized.slice(0, IDNUMBER_MAX_LENGTH);
+  }
+  return sanitized;
+};
+
+const onIdKeydown = (event) => {
+  const { key, target } = event;
+
+  if (CONTROL_KEYS.has(key) || event.ctrlKey || event.metaKey || event.altKey) {
+    return;
+  }
+
+  if (/^\d$/.test(key)) {
+    if (!target || typeof target.value !== 'string') {
+      event.preventDefault();
+      return;
+    }
+    const input = target;
+    const currentLength = input.value.length;
+    const selStart = input.selectionStart ?? currentLength;
+    const selEnd   = input.selectionEnd ?? currentLength;
+    const selLen   = selEnd - selStart;
+
+    if (currentLength - selLen >= IDNUMBER_MAX_LENGTH) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  // Bloquea todo lo que no sea dígito
+  event.preventDefault();
+};
+
+const handleIdInput = () => {
+  formData.value.idNumber = sanitizeIdNumber(formData.value.idNumber);
+};
+
+const handleIdBlur = () => {
+  formData.value.idNumber = sanitizeIdNumber(formData.value.idNumber);
+};
+
+const handleIdPaste = (event) => {
+  const pasted = event.clipboardData?.getData('text') ?? '';
+  const target = event.target;
+
+  if (!target || typeof target.value !== 'string') {
+    formData.value.idNumber = sanitizeIdNumber(formData.value.idNumber);
+    return;
+  }
+
+  const { selectionStart = 0, selectionEnd = selectionStart, value } = target;
+  const combined = value.slice(0, selectionStart) + pasted + value.slice(selectionEnd);
+
+  formData.value.idNumber = sanitizeIdNumber(combined);
+};
+
 
 const sanitizePhone = (value = '') => {
   if (!value) return '';
