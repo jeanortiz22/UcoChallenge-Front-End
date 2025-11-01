@@ -786,26 +786,23 @@ const handleSubmit = async () => {
       router.push({ name: 'dashboard' });
     }, 2000);
     
-  } catch (error) {
-    console.error('❌ Error al registrar usuario:', error);
-    
-    if (error.response) {
-      const status = error.response.status;
-      const data = error.response.data;
-      
-      if (status === 400) {
-        errorMessage.value = `Datos inválidos: ${data.message || 'Verifica los campos'}`;
-      } else if (status === 409) {
-        errorMessage.value = 'El email o número de identificación ya está registrado';
-      } else {
-        errorMessage.value = `Error ${status}: ${data.message || 'No se pudo registrar'}`;
-      }
-    } else {
-      errorMessage.value = 'Error de conexión. Verifica que el backend esté corriendo.';
-    }
-  } finally {
-    isSubmitting.value = false;
+} catch (err) {
+  // err normalizado: { status, message, messageCode, parameters, path, timestamp }
+  console.error('❌ Error al registrar usuario (normalizado):', err);
+
+  if (err.status === 0) {
+    errorMessage.value = err.message || 'Error de conexión. Verifica que el backend esté corriendo.';
+  } else {
+    // Mostrar exactamente lo que resolvió el catálogo en el back
+    errorMessage.value = err.message || 'Ocurrió un error en el servidor.';
   }
+
+  // (Opcional) si el back manda errores por campo en "parameters", los pintas aquí.
+} finally {
+  isSubmitting.value = false;
+}
+
+
 };
 
 const resetForm = () => {
