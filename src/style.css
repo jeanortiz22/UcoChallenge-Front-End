@@ -29,7 +29,7 @@ body {
   justify-content: center;
   min-width: 320px;
   min-height: 100vh;
-  background: linear-gradient(135deg, #001f0d 0%, #fafafa 50%, #000000 100%) !important;
+  background: linear-gradient(135deg, #001f0d 0%, #003b1a 50%, #000000 100%) !important;
   background-attachment: fixed;
 }
 

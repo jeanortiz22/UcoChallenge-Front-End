@@ -15,9 +15,65 @@ const defaultTokenParams = import.meta.env.VITE_AUTH0_AUDIENCE
 
 let auth0Client = null;
 export const setAuth0Client = (client) => { auth0Client = client; };
-
 export const getAuth0Client = () => auth0Client;
 
+/* ===========================
+   Resolver de mensajes humanos
+   =========================== */
+
+// Ideal: rutea messages-service por el Gateway (mismo origen/CORS)
+const MESSAGES_BASE_URL =
+  import.meta.env.VITE_MESSAGES_BASE_URL || import.meta.env.VITE_API_BASE_URL;
+
+// Cliente separado para evitar recursión de interceptores
+const messagesClient = axios.create({
+  baseURL: MESSAGES_BASE_URL,
+  timeout: 8000,
+  headers: { Accept: 'application/json' },
+});
+
+// Caché en memoria para el catálogo ya resuelto
+const messageCache = new Map(); // key -> template renderizado por params
+
+const isCodeLike = (val) =>
+  typeof val === 'string' &&
+  /^[a-z0-9]+(?:\.[a-z0-9]+)+$/i.test(val);
+
+// Extrae un code válido desde un string con ruido (ej. "[user.register.x]")
+function extractCodeFromString(s) {
+  if (typeof s !== 'string') return null;
+  const cleaned = s.trim();
+  if (isCodeLike(cleaned)) return cleaned;
+  const m = cleaned.match(/\[?\s*([a-z0-9]+(?:\.[a-z0-9]+)+)\s*\]?/i);
+  return m ? m[1] : null;
+}
+
+async function resolveMessageFromCatalog(code, params = []) {
+  if (!code) return null;
+
+  const cacheKey = `${code}::${JSON.stringify(params)}`;
+  if (messageCache.has(cacheKey)) return messageCache.get(cacheKey);
+
+  try {
+    // GET /api/v1/messages/{key}?p=...&p=...
+    const resp = await messagesClient.get(`/api/v1/messages/${encodeURIComponent(code)}`, {
+      params: { p: params }, // axios genera múltiples p=
+    });
+
+    const human = resp?.data?.message;
+    if (human && typeof human === 'string') {
+      messageCache.set(cacheKey, human);
+      return human;
+    }
+  } catch {
+    // silencioso: fallback al code si falla
+  }
+  return null;
+}
+
+/* ===========================
+   Interceptor de autorización
+   =========================== */
 apiClient.interceptors.request.use(
   async (config) => {
     if (auth0Client?.getAccessTokenSilently) {
@@ -43,7 +99,9 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// --- 🔽 Interceptor de respuesta robusto 🔽
+/* ==========================================
+   Interceptor de respuesta + resolución catálogo
+   ========================================== */
 apiClient.interceptors.response.use(
   (r) => r,
   async (error) => {
@@ -68,25 +126,17 @@ apiClient.interceptors.response.use(
     // 3) Hay respuesta HTTP con status
     const { status, data, headers, statusText } = error.response;
 
-    // Helper para parsear data a objeto JS
     const parsePayload = async (raw) => {
       try {
         if (raw == null) return null;
-
-        // Caso Blob (HTML, problem+json, etc.)
         if (typeof Blob !== 'undefined' && raw instanceof Blob) {
           const text = await raw.text();
           try { return JSON.parse(text); } catch { return { _rawText: text }; }
         }
-
-        // Caso string plano
         if (typeof raw === 'string') {
           try { return JSON.parse(raw); } catch { return { _rawText: raw }; }
         }
-
-        // Ya es objeto
         if (typeof raw === 'object') return raw;
-
         return { _rawText: String(raw) };
       } catch {
         return null;
@@ -95,15 +145,8 @@ apiClient.interceptors.response.use(
 
     const payload = await parsePayload(data);
     const contentType = headers?.['content-type'] ?? '';
-
-    // Extraer campos comunes
     const pickFirst = (...vals) => vals.find((v) => v != null && v !== '') ?? undefined;
 
-    // Mapeos posibles:
-    // - Tu ApiExceptionHandler: { message, messageCode, parameters, path, timestamp }
-    // - Spring problem+json: { title, detail, status, type, instance }
-    // - Spring default error: { error, message, errors[], path, timestamp, status }
-    // - HTML/text del WAF: payload?._rawText
     let message;
     let messageCode;
     let parameters;
@@ -111,54 +154,61 @@ apiClient.interceptors.response.use(
     let timestamp;
 
     if (payload && typeof payload === 'object' && !payload._rawText) {
-      // message
       message = pickFirst(
         payload.message,
-        payload.detail,        // problem+json
-        payload.error,         // Spring default
+        payload.detail,
+        payload.error,
         Array.isArray(payload.errors) ? payload.errors.map(e => e.defaultMessage || e.message).join(' | ') : undefined,
       );
-
-      // messageCode
       messageCode = pickFirst(
         payload.messageCode,
         payload.code,
         payload.errorCode,
-        payload.type,          // a veces usan 'type' como code semántico
+        payload.type,
         'UNKNOWN_ERROR'
       );
-
       parameters = payload.parameters ?? payload.args ?? undefined;
       path = payload.path ?? payload.instance ?? undefined;
       timestamp = payload.timestamp ?? undefined;
     } else {
-      // Llega HTML o texto
       const maybeHtml = payload?._rawText ?? '';
-      // Intenta sacar un título/primera línea legible
       const firstLine = maybeHtml.split('\n').map(s => s.trim()).find(Boolean);
       message = firstLine || statusText || 'Ocurrió un error en el servidor';
       messageCode = 'NON_JSON_ERROR';
     }
 
-    // Si sigue sin mensaje y el content-type es problem+json, usa statusText/estatus
     if (!message && contentType.includes('application/problem+json')) {
       message = statusText || `Error ${status}`;
     }
-
-    // Último recurso
     if (!message) message = 'Ocurrió un error en el servidor';
 
     const normalized = {
       status,
       message,
       messageCode,
-      parameters: parameters ?? [],
+      parameters: Array.isArray(parameters) ? parameters : [],
       path,
       timestamp,
     };
 
-    // (opcional) Log detallado para depurar
-    // console.debug('🔎 Error normalizado:', normalized, 'payload:', payload, 'headers:', headers);
+    // === Resolver mensaje humano si estamos mostrando un code (con o sin corchetes)
+    try {
+      let code =
+        extractCodeFromString(normalized.messageCode) ||
+        extractCodeFromString(normalized.message);
+
+      if (code) {
+        const resolved = await resolveMessageFromCatalog(code, normalized.parameters);
+        if (resolved) {
+          normalized.message = resolved;
+        } else {
+          // fallback: deja el code limpio (sin brackets) si no resolvió
+          normalized.message = normalized.message || code;
+        }
+      }
+    } catch {
+      // si falla, deja tal cual
+    }
 
     return Promise.reject(normalized);
   }
